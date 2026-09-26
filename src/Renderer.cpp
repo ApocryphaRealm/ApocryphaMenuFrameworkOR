@@ -708,10 +708,7 @@ namespace renderer
 				auto& v = settings::Get();
 				const bool anySet = v.nestedWindow.IsSet() || v.hotkeyWindow.IsSet();
 				ImGui::TextUnformatted(TR("AMF_WindowPosSize", "Window position and size"));
-				ImGui::TextWrapped("%s", TR("AMF_WindowProfilesHelp", "Each way of opening this menu remembers where you leave it: one for the "
-								   "System menu row, one for the key. They start fitted to the journal panel "
-								   "and centred on the screen respectively - move or resize either and it "
-								   "keeps what you chose."));
+				ImGui::TextWrapped("%s", TR("AMF_WindowProfilesHelp", "The window remembers where you leave it: move it by its title bar or resize it by a corner and it opens there next time. The button puts it back to centred on the screen."));
 				ImGui::BeginDisabled(!anySet);
 				if (ImGui::Button(TR("AMF_ResetBoth", "Reset both to default")))
 				{
