@@ -405,6 +405,60 @@ namespace input
 		// Driver presses, walked by PollGamepad on the render thread through DecideButton - the path a
 		// real key takes, so a test drives the shipped decision rather than a shortcut around it.
 		struct Injected { Dev dev; std::uint32_t code; int framesLeft; bool downSent; };
+
+		// RAW KEYBOARD (2026-09-26). F1 did nothing in gameplay while it worked at the title screen: with the keyboard
+		// registered for raw input with RIDEV_NOLEGACY, Windows sends no WM_KEYDOWN at all and the keys arrive only as
+		// WM_INPUT. Whether that is the case is read from the process's own registrations (refreshed from the render
+		// thread, logged when it changes); while it is, keys are taken from raw input instead of the key messages, so
+		// every key is handled exactly once whichever path Windows uses.
+		std::atomic<bool> g_rawKeyboardNoLegacy{ false };
+		std::atomic<bool> g_sawKeyMessage{ false };
+		std::atomic<bool> g_sawRawKey{ false };
+		std::unordered_set<std::uint32_t> g_rawHeld;   // window thread only: raw input repeats a held key's make code
+
+		void RefreshRawRegistrations()
+		{
+			static int s_frames = 0;
+			if (s_frames++ % 120 != 0) { return; }
+			UINT n = 0;
+			if (::GetRegisteredRawInputDevices(nullptr, &n, sizeof(RAWINPUTDEVICE)) == static_cast<UINT>(-1) && ::GetLastError() != ERROR_INSUFFICIENT_BUFFER) { return; }
+			std::vector<RAWINPUTDEVICE> devs(n);
+			if (n && ::GetRegisteredRawInputDevices(devs.data(), &n, sizeof(RAWINPUTDEVICE)) == static_cast<UINT>(-1)) { return; }
+			bool noLegacy = false;
+			std::string summary;
+			for (UINT i = 0; i < n; ++i)
+			{
+				const auto& d = devs[i];
+				summary += std::format("{}{:02X}/{:02X} flags 0x{:X}", summary.empty() ? "" : ", ", d.usUsagePage, d.usUsage, d.dwFlags);
+				if (d.usUsagePage == 0x01 && d.usUsage == 0x06 && (d.dwFlags & RIDEV_NOLEGACY)) { noLegacy = true; }
+			}
+			static std::string s_last = "(none yet)";
+			if (summary != s_last)
+			{
+				logger::info("input: the game's raw-input registrations are now [{}]; keyboard legacy messages {}", summary.empty() ? "none" : summary,
+							 noLegacy ? "OFF - keys are taken from raw input" : "on - keys come from WM_KEYDOWN");
+				s_last = summary;
+			}
+			g_rawKeyboardNoLegacy.store(noLegacy, std::memory_order_release);
+		}
+
+		// Characters for a raw key press while the menu is open (no WM_CHAR is made when legacy messages are off).
+		void QueueCharsForRawKey(USHORT a_vk, USHORT a_make)
+		{
+			BYTE state[256]{};
+			for (const int vk : { VK_SHIFT, VK_LSHIFT, VK_RSHIFT, VK_CONTROL, VK_LCONTROL, VK_RCONTROL, VK_MENU, VK_LMENU, VK_RMENU })
+			{
+				if (::GetAsyncKeyState(vk) & 0x8000) { state[vk] = 0x80; }
+			}
+			if (::GetKeyState(VK_CAPITAL) & 0x0001) { state[VK_CAPITAL] = 0x01; }
+			if ((state[VK_CONTROL] & 0x80) && !(state[VK_MENU] & 0x80)) { return; }   // Ctrl+key is a shortcut, not text
+			wchar_t buf[4]{};
+			const int n = ::ToUnicodeEx(a_vk, a_make, state, buf, 4, 0x4, ::GetKeyboardLayout(0));   // 0x4: leave the dead-key state alone
+			for (int i = 0; i < n; ++i)
+			{
+				if (buf[i] >= 0x20 && buf[i] != 0x7F) { Enqueue({ Record::Kind::kCharacter, static_cast<std::uint32_t>(buf[i]), true, 0.0f, 0.0f }); }
+			}
+		}
 		std::mutex g_injectLock;
 		std::vector<Injected> g_injected;
 		std::vector<std::uint32_t> g_injectedChars;
@@ -461,6 +515,11 @@ namespace input
 		case WM_SYSKEYUP:
 			{
 				const bool down = (a_msg == WM_KEYDOWN || a_msg == WM_SYSKEYDOWN);
+				if (!g_sawKeyMessage.exchange(true)) { logger::info("input: first key message (WM_KEYDOWN path) seen"); }
+				if (g_rawKeyboardNoLegacy.load(std::memory_order_acquire))
+				{
+					return open;   // a stray legacy message while raw input carries the keys: raw input decides
+				}
 				if (down && (a_lp & (1LL << 30)))
 				{
 					return open;   // auto-repeat: ImGui repeats a held key itself; the game gets none while the menu is up
@@ -508,6 +567,41 @@ namespace input
 			::SetCursor(nullptr);
 			return true;
 		case WM_INPUT:
+			{
+				RAWINPUTHEADER kh{};
+				UINT khSize = sizeof(kh);
+				if (::GetRawInputData(reinterpret_cast<HRAWINPUT>(a_lp), RID_HEADER, &kh, &khSize, sizeof(RAWINPUTHEADER)) != static_cast<UINT>(-1) &&
+					kh.dwType == RIM_TYPEKEYBOARD)
+				{
+					RAWINPUT kr{};
+					UINT krSize = sizeof(kr);
+					if (::GetRawInputData(reinterpret_cast<HRAWINPUT>(a_lp), RID_INPUT, &kr, &krSize, sizeof(RAWINPUTHEADER)) == static_cast<UINT>(-1))
+					{
+						return open;
+					}
+					const RAWKEYBOARD& k = kr.data.keyboard;
+					if (!g_sawRawKey.exchange(true))
+					{
+						logger::info("input: first raw keyboard input seen (legacy messages {})",
+									 g_rawKeyboardNoLegacy.load() ? "off - raw input is used" : "on - WM_KEYDOWN is used");
+					}
+					if (!g_rawKeyboardNoLegacy.load(std::memory_order_acquire) || k.MakeCode == 0 || k.VKey == 0xFF)
+					{
+						return open;   // the key messages carry this key; while the menu is up the game gets neither
+					}
+					const std::uint32_t sc = (k.MakeCode & 0x7Fu) | ((k.Flags & RI_KEY_E0) ? 0x80u : 0u);
+					const bool down = !(k.Flags & RI_KEY_BREAK);
+					if (down && !g_rawHeld.insert(sc).second)
+					{
+						return open;   // raw input repeats a held key; ImGui repeats it itself
+					}
+					if (!down) { g_rawHeld.erase(sc); }
+					const bool consumed = DecideButton(Dev::kKeyboard, sc, down);
+					const bool nowOpen = renderer::IsMainWindowVisible();
+					if (down && open && nowOpen) { QueueCharsForRawKey(k.VKey, k.MakeCode); }
+					return consumed || nowOpen || open;
+				}
+			}
 			if (!open) { return false; }
 			{
 				// Unreal's mouse look reads raw input; swallowing it is what stops the camera. The delta is
@@ -541,6 +635,7 @@ namespace input
 
 	void PollGamepad()
 	{
+		RefreshRawRegistrations();
 		const bool open = renderer::IsMainWindowVisible();
 
 		// A page that took the sticks gets them taken back the moment the menu is not up, so a mod that
