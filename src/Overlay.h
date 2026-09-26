@@ -8,11 +8,12 @@
 // game's WinMain, so the DXGI factory exports are hooked before the renderer exists; the factory's
 // CreateSwapChainForHwnd / CreateSwapChain receive the ID3D12CommandQueue as their "device" argument, which is the
 // queue that presents - the one ImGui's command list must be executed on.
+//
+// The overlay owns the D3D12 objects (see Gfx.h for what it lends out); the renderer (Renderer.cpp, the Skyrim AMF
+// core) owns ImGui and everything drawn. Their meeting points are renderer::OnDeviceReady and renderer::OnFrame.
 
 namespace Overlay
 {
-	bool Install();          // hook the DXGI factory exports; call from OBSEPlugin_Load
-	bool IsOpen();
-	void SetOpen(bool a_open);
-	void Toggle();
+	bool  Install();      // hook the DXGI factory exports; call from OBSEPlugin_Load
+	void* GameWindow();   // the HWND the swap chain presents to; null before the first Present
 }
