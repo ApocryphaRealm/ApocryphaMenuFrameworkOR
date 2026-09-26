@@ -35,7 +35,7 @@ target("ApocryphaMenuFramework")
     })
     add_deps("imgui")
     add_packages("minhook")
-    add_syslinks("d3d12", "dxgi", "user32", "ole32", "shell32", "windowscodecs")
+    add_syslinks("d3d12", "dxgi", "user32", "ole32", "shell32", "shlwapi", "windowscodecs")
     on_load(function (target)
         target:add("defines", "AMF_VERSION=\"" .. (target:version() or "0.0.0") .. "\"")
     end)
@@ -43,3 +43,15 @@ target("ApocryphaMenuFramework")
     add_headerfiles("src/**.h", "include/**.h")
     add_includedirs("include", "src")
     set_pcxxheader("src/pch.h")
+
+-- The SDK example: a separate mod that adds pages through sdk/include/AMF.h alone. Proves the public header end to end;
+-- it is not part of the framework's package.
+target("AMFExample")
+    add_rules("commonlibob64.plugin", {
+        name = "AMFExample",
+        author = "ApocryphaRealm",
+        description = "AMF Example - a mod with pages in the Apocrypha Menu Framework (SDK sample)"
+    })
+    add_deps("imgui")
+    add_files("sdk/example/*.cpp")
+    add_includedirs("sdk/include")

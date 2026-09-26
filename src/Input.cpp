@@ -12,6 +12,7 @@
 
 #include <imgui.h>
 #include <Xinput.h>
+#include <shlwapi.h>
 #include <imgui_internal.h>   // GImGui: the active item is asked for directly, so a text field can keep the D-pad
 
 #include <atomic>
@@ -479,11 +480,112 @@ namespace input
 		// the game for the whole session, menu never opened (the owner's bisect, 2026-09-26: OBSE64 alone worked,
 		// OBSE64 + AMF did not). The DLL the game itself loaded is preferred, so the framework reads the pad through
 		// the same (Steam-hooked) entry point the game does; loading one is the last resort.
+		// ---- THE PAD GATE (2026-09-26) ----------------------------------------------------------------------------
+		// Swallowing window messages keeps the keyboard and mouse from the game while the menu is up, but the pad is
+		// not a message: the game polls XInput itself, so A pressed on a menu entry also activated whatever the game
+		// had under the cursor (the owner, first SDK test). The game's own reads are therefore routed through the
+		// framework: its executable imports XInputGetState from XINPUT1_3.dll by ordinal (2), and that import slot is
+		// repointed here the first time the menu opens - after Steam Input has put its own answer there, which is
+		// kept and called, so the framework and the game both read the pad Steam presents. While the menu is up the
+		// game gets a neutral pad; after it closes the pad stays neutral until every button is up, so the press that
+		// closed it cannot fire in the game.
+		using XInputSetState_t = DWORD(WINAPI*)(DWORD, void*);
+		XInputGetState_t  g_gameXInput = nullptr;      // what the game's import pointed at before the gate (Steam's, or the DLL's)
+		std::atomic<bool> g_padSettling{ false };
+		std::atomic<std::uint64_t> g_gateReads{ 0 }, g_gateNeutral{ 0 };
+		DWORD             g_packetOffset = 0;
+
+		DWORD WINAPI GatedXInputGetState(DWORD a_user, XINPUT_STATE* a_state)
+		{
+			const DWORD rc = g_gameXInput ? g_gameXInput(a_user, a_state) : ERROR_DEVICE_NOT_CONNECTED;
+			++g_gateReads;
+			if (rc != ERROR_SUCCESS || !a_state || a_user != 0) { return rc; }
+			const bool open = renderer::IsMainWindowVisible();
+			static bool s_wasOpen = false;
+			if (s_wasOpen && !open) { g_padSettling.store(true); }
+			s_wasOpen = open;
+			bool neutral = open;
+			if (!open && g_padSettling.load())
+			{
+				const auto& g = a_state->Gamepad;
+				if (g.wButtons == 0 && g.bLeftTrigger < 30 && g.bRightTrigger < 30) { g_padSettling.store(false); }
+				else { neutral = true; }
+			}
+			if (neutral)
+			{
+				++g_gateNeutral;
+				a_state->Gamepad = XINPUT_GAMEPAD{};
+				++g_packetOffset;   // the packet number keeps moving, so the game processes the (empty) state and sees the releases
+			}
+			a_state->dwPacketNumber += g_packetOffset;
+			return rc;
+		}
+
+		const char* ModuleNameOf(const void* a_p)
+		{
+			static char s_name[MAX_PATH]{};
+			HMODULE m = nullptr;
+			if (a_p && ::GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, static_cast<LPCWSTR>(a_p), &m) && m)
+			{
+				wchar_t w[MAX_PATH]{};
+				if (::GetModuleFileNameW(m, w, MAX_PATH)) { ::WideCharToMultiByte(CP_UTF8, 0, ::PathFindFileNameW(w), -1, s_name, MAX_PATH, nullptr, nullptr); return s_name; }
+			}
+			return "an unknown module";
+		}
+
+		// Finds the game executable's import slot for XINPUT1_3!XInputGetState (ordinal 2, or by name) and points it
+		// here. Returns false, logged, when the import is not there - then the gate is simply absent.
+		bool InstallPadGate()
+		{
+			static int s_state = 0;   // 0 untried, 1 installed, -1 failed
+			if (s_state != 0) { return s_state > 0; }
+			s_state = -1;
+			const auto base = reinterpret_cast<std::uint8_t*>(::GetModuleHandleW(nullptr));
+			const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+			const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS64*>(base + dos->e_lfanew);
+			const auto& dir = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+			if (!dir.VirtualAddress) { logger::warn("pad gate: the game executable has no import table; the game keeps reading the pad while the menu is open"); return false; }
+			for (auto* desc = reinterpret_cast<const IMAGE_IMPORT_DESCRIPTOR*>(base + dir.VirtualAddress); desc->Name; ++desc)
+			{
+				const char* dllName = reinterpret_cast<const char*>(base + desc->Name);
+				if (::_strnicmp(dllName, "xinput", 6) != 0) { continue; }
+				auto* names = reinterpret_cast<const IMAGE_THUNK_DATA64*>(base + (desc->OriginalFirstThunk ? desc->OriginalFirstThunk : desc->FirstThunk));
+				auto* slots = reinterpret_cast<IMAGE_THUNK_DATA64*>(base + desc->FirstThunk);
+				for (; names->u1.AddressOfData; ++names, ++slots)
+				{
+					bool match = false;
+					if (IMAGE_SNAP_BY_ORDINAL64(names->u1.Ordinal)) { match = IMAGE_ORDINAL64(names->u1.Ordinal) == 2; }
+					else { match = std::strcmp(reinterpret_cast<const IMAGE_IMPORT_BY_NAME*>(base + names->u1.AddressOfData)->Name, "XInputGetState") == 0; }
+					if (!match) { continue; }
+					auto* slot = reinterpret_cast<XInputGetState_t*>(&slots->u1.Function);
+					g_gameXInput = *slot;
+					DWORD old = 0;
+					if (!::VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &old)) { logger::warn("pad gate: the import slot could not be made writable ({}); gate not installed", ::GetLastError()); return false; }
+					*slot = &GatedXInputGetState;
+					::VirtualProtect(slot, sizeof(void*), old, &old);
+					logger::info("pad gate: the game's {} import of XInputGetState (previously {} in {}) now goes through the framework; the game sees a neutral pad while the menu is open",
+								 dllName, static_cast<const void*>(g_gameXInput), ModuleNameOf(reinterpret_cast<const void*>(g_gameXInput)));
+					s_state = 1;
+					return true;
+				}
+			}
+			logger::warn("pad gate: the game executable imports no XInputGetState; the game keeps reading the pad while the menu is open");
+			return false;
+		}
+
 		void ResolveXInput()
 		{
 			static bool s_tried = false;
 			if (s_tried) { return; }
 			s_tried = true;
+			// The gate first: it also tells the framework what the game reads through (Steam Input's answer, when
+			// Steam is in the process), and that is the pad the menu should follow.
+			if (InstallPadGate() && g_gameXInput)
+			{
+				g_xinput = g_gameXInput;
+				logger::info("input: controller read through the game's own XInput import");
+				return;
+			}
 			constexpr const wchar_t* kDlls[] = { L"xinput1_4.dll", L"xinput1_3.dll", L"xinput9_1_0.dll" };
 			for (const bool load : { false, true })
 			{
@@ -670,6 +772,7 @@ namespace input
 		{
 			if (g_padButtons != 0)
 			{
+				g_padSettling.store(true);   // the button that closed the menu must not fire in the game
 				for (std::uint32_t bit = 1; bit <= 0x8000; bit <<= 1)
 				{
 					if (g_padButtons & bit) { DecideButton(Dev::kGamepad, bit, false); }
@@ -698,7 +801,8 @@ namespace input
 			}
 			else if (s_reads % 3600 == 0)
 			{
-				logger::debug("input: {} XInput reads so far", s_reads);
+				logger::debug("input: {} XInput reads by the framework; the game made {} through the gate, {} of them answered neutral",
+							  s_reads, g_gateReads.load(), g_gateNeutral.load());
 			}
 		}
 		if (rc == ERROR_SUCCESS)

@@ -148,6 +148,45 @@ AMF_API std::uint32_t AMF_GetInputMode()
 	return input::UsingController() ? 1u : 0u;
 }
 
+// ---- Sharing the framework's Dear ImGui with a C++ consumer (Oblivion Remastered 0.1.0) ----------------------------
+// A page draws inside the framework's frame, so it must use the framework's context. A consumer compiled against the
+// same Dear ImGui (1.90.8 docking, obsolete functions kept) calls ImGui::SetCurrentContext / SetAllocatorFunctions
+// with these and then uses the ordinary C++ API; AMF.h does it for them after AMF_CheckImGuiABI agrees. The cimgui
+// ig* exports remain for C consumers and for anything built against a different ImGui.
+
+AMF_API void* AMF_GetImGuiContext()
+{
+	return ImGui::GetCurrentContext();   // null until the renderer is up (first Present)
+}
+
+AMF_API bool AMF_GetImGuiAllocatorFunctions(void** a_alloc, void** a_free, void** a_userData)
+{
+	ImGuiMemAllocFunc alloc = nullptr;
+	ImGuiMemFreeFunc  free = nullptr;
+	void*             user = nullptr;
+	ImGui::GetAllocatorFunctions(&alloc, &free, &user);
+	if (a_alloc) { *a_alloc = reinterpret_cast<void*>(alloc); }
+	if (a_free) { *a_free = reinterpret_cast<void*>(free); }
+	if (a_userData) { *a_userData = user; }
+	return alloc && free;
+}
+
+// The same layout test ImGui's own IMGUI_CHECKVERSION makes, answered for the framework's build: a consumer passes its
+// IMGUI_VERSION and sizeof values; any difference means sharing the context would corrupt memory, so it must not.
+AMF_API bool AMF_CheckImGuiABI(const char* a_version, std::size_t a_io, std::size_t a_style, std::size_t a_vec2,
+	std::size_t a_vec4, std::size_t a_drawVert, std::size_t a_drawIdx)
+{
+	const bool ok = a_version && std::strcmp(a_version, IMGUI_VERSION) == 0 && a_io == sizeof(ImGuiIO) &&
+	                a_style == sizeof(ImGuiStyle) && a_vec2 == sizeof(ImVec2) && a_vec4 == sizeof(ImVec4) &&
+	                a_drawVert == sizeof(ImDrawVert) && a_drawIdx == sizeof(ImDrawIdx);
+	if (!ok) {
+		logger::warn("AMF_CheckImGuiABI: a consumer built against Dear ImGui \"{}\" (io {}, style {}) asked to share the "
+					 "framework's {} (io {}, style {}) - refused; it must use the ig* exports instead",
+			a_version ? a_version : "(null)", a_io, a_style, IMGUI_VERSION, sizeof(ImGuiIO), sizeof(ImGuiStyle));
+	}
+	return ok;
+}
+
 OBSE_PLUGIN_LOAD(const OBSE::LoadInterface* a_obse)
 {
 	OBSE::Init(a_obse);
