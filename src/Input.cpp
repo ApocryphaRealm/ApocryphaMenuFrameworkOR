@@ -413,23 +413,41 @@ namespace input
 	bool Install()
 	{
 		// Nothing to hook: the overlay's window procedure calls OnWindowMessage and the renderer calls
-		// PollGamepad each frame. The XInput entry point is resolved here, once, from whichever DLL loads
-		// (the same order Unreal's own XInput interface tries).
-		for (const wchar_t* dll : { L"xinput1_4.dll", L"xinput1_3.dll", L"xinput9_1_0.dll" })
-		{
-			if (HMODULE m = ::LoadLibraryW(dll))
-			{
-				g_xinput = reinterpret_cast<XInputGetState_t>(::GetProcAddress(m, "XInputGetState"));
-				if (g_xinput)
-				{
-					logger::info("input: controller read through {}", std::filesystem::path(dll).string());
-					break;
-				}
-			}
-		}
-		if (!g_xinput) { logger::warn("input: no XInput DLL found - the menu takes keyboard and mouse only"); }
+		// PollGamepad each frame. XInput is NOT touched here - see ResolveXInput.
 		logger::info("input: keyboard and mouse through the game window's messages; menu key 0x{:X}", settings::Get().toggleKey);
 		return true;
+	}
+
+	namespace
+	{
+		// XInput is resolved the first time the menu opens, never at plugin load. Loading xinput1_4.dll at OBSE's
+		// load - before the game and Steam's overlay had set up their controller path - left the controller dead in
+		// the game for the whole session, menu never opened (the owner's bisect, 2026-09-26: OBSE64 alone worked,
+		// OBSE64 + AMF did not). The DLL the game itself loaded is preferred, so the framework reads the pad through
+		// the same (Steam-hooked) entry point the game does; loading one is the last resort.
+		void ResolveXInput()
+		{
+			static bool s_tried = false;
+			if (s_tried) { return; }
+			s_tried = true;
+			constexpr const wchar_t* kDlls[] = { L"xinput1_4.dll", L"xinput1_3.dll", L"xinput9_1_0.dll" };
+			for (const bool load : { false, true })
+			{
+				for (const wchar_t* dll : kDlls)
+				{
+					HMODULE m = load ? ::LoadLibraryW(dll) : ::GetModuleHandleW(dll);   // xinput-deferred: first menu open, never at plugin load
+					if (!m) { continue; }
+					g_xinput = reinterpret_cast<XInputGetState_t>(::GetProcAddress(m, "XInputGetState"));
+					if (g_xinput)
+					{
+						logger::info("input: controller read through {} ({})", std::filesystem::path(dll).string(),
+									 load ? "loaded by the framework - the game had none" : "the game's own copy");
+						return;
+					}
+				}
+			}
+			logger::warn("input: no XInput DLL found - the menu takes keyboard and mouse only");
+		}
 	}
 
 	bool OnWindowMessage(HWND, UINT a_msg, WPARAM a_wp, LPARAM a_lp)
@@ -566,6 +584,7 @@ namespace input
 			for (float& s : g_padSent) { s = 0.0f; }
 			return;
 		}
+		ResolveXInput();
 		if (!g_xinput) { return; }
 		XINPUT_STATE st{};
 		WORD buttons = 0;
