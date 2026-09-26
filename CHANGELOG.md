@@ -2,7 +2,9 @@
 
 Newest first. Versions are issued by the version gate; a number here is one a build earned by working in game.
 
-## 0.1.0 - 2026-09-26 (in development, not released)
+## 1.0.1 - 2026-09-26
+
+First release. (0.1.0 was the first working build of the night; the owner set the release number to 1.0.1.)
 
 The Skyrim Apocrypha Menu Framework brought to The Elder Scrolls IV: Oblivion Remastered as an OBSE64 plugin.
 
