@@ -12,3 +12,7 @@ vs*/
 # files
 *.zip
 compile_commands.json
+
+build/
+.xmake/
+vsxmake*/

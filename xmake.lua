@@ -1,26 +1,37 @@
--- include subprojects
+-- Apocrypha Menu Framework for The Elder Scrolls IV: Oblivion Remastered (OBSE64 plugin).
+-- Its own project and repository beside the Skyrim AMF; the name stays AMF (the owner, 2026-09-26).
 includes("lib/commonlibob64")
 
--- set project constants
-set_project("commonlibob64-template")
-set_version("0.0.0")
-set_license("GPL-3.0")
+set_project("ApocryphaMenuFramework")
+set_version("0.1.0")
+set_license("GPL-3.0-or-later")
 set_languages("c++23")
 set_warnings("allextra")
 
--- add common rules
 add_rules("mode.debug", "mode.releasedbg")
 add_rules("plugin.vsxmake.autoupdate")
 
--- define targets
-target("commonlibob64-template")
-    add_rules("commonlibob64.plugin", {
-        name = "commonlibob64-template",
-        author = "libxse",
-        description = "OBSE64 plugin template using CommonLibOB64"
-    })
+add_requires("minhook")
 
-    -- add src files
+-- Dear ImGui 1.90.8 docking - the version Skyrim AMF embeds, so its ig* export surface and core carry over unchanged
+target("imgui")
+    set_kind("static")
+    set_warnings("none")
+    add_files("extern/imgui/imgui.cpp", "extern/imgui/imgui_draw.cpp", "extern/imgui/imgui_tables.cpp",
+              "extern/imgui/imgui_widgets.cpp", "extern/imgui/backends/imgui_impl_dx12.cpp",
+              "extern/imgui/backends/imgui_impl_win32.cpp")
+    add_includedirs("extern/imgui", "extern/imgui/backends", {public = true})
+    add_defines("IMGUI_DISABLE_OBSOLETE_FUNCTIONS", {public = true})
+
+target("ApocryphaMenuFramework")
+    add_rules("commonlibob64.plugin", {
+        name = "ApocryphaMenuFramework",
+        author = "ApocryphaRealm",
+        description = "Apocrypha Menu Framework - one in-game settings menu for every mod (Oblivion Remastered)"
+    })
+    add_deps("imgui")
+    add_packages("minhook")
+    add_syslinks("d3d12", "dxgi", "user32")
     add_files("src/**.cpp")
     add_headerfiles("src/**.h")
     add_includedirs("src")
