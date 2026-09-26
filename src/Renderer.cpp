@@ -1223,9 +1223,7 @@ namespace renderer
 				ImGui::SeparatorText(TR("AMF_ManOpening", "Opening and closing the menu"));
 				para(TR("AMF_ManOpening1", "Press F1 to open the menu and F1 again to close it. Escape closes it too. The key "
 						"is yours to change: Settings -> Menu toggle key -> Rebind, then press the key you want."));
-				para(TR("AMF_ManOpening2", "On a controller, Start closes the menu. There is no controller button that opens it - "
-						"open it from the journal instead: press Start, go to the System tab, and choose the "
-						"SKSE MENUS row. That row can be turned off under Settings if you would rather not have it."));
+				para(TR("AMF_ManOpening2", "On a controller, Start closes the menu. There is no controller button that opens it yet: open it with F1 (or the key you rebind under Controls), then pick up the pad - the menu follows it from there."));
 				para(TR("AMF_ManOpening3", "While the menu is up the game does not see your keys or your mouse, so the camera and "
 						"your character stay still. Mods' own hotkeys are held off as well, so a key that opens "
 						"something else cannot fire while you are reading a page."));
@@ -1288,22 +1286,15 @@ namespace renderer
 			if (tab(TR("AMF_HelpTabReadme", "Readme")))
 			{
 				ImGui::Spacing();
-				ImGui::TextWrapped("%s", TR("AMF_Help1", "ApocryphaRealm Menu Framework presents mod settings in one menu, laid out like "
-								   "the game's own: tabs across the top, a list down the side, and the "
-								   "selected entry's options here."));
+				ImGui::TextWrapped("%s", TR("AMF_Help1", "ApocryphaRealm Menu Framework presents mod settings in one menu: a list down the side, and the selected entry's options here."));
 				ImGui::Spacing();
-				ImGui::TextWrapped("%s", TR("AMF_Help2", "Mod settings live under System -> Mod menus, the same place SkyUI puts Mod "
-								   "Configuration. Framework options are under System -> Settings, and key "
-								   "bindings under System -> Controls."));
+				ImGui::TextWrapped("%s", TR("AMF_Help2", "Mod settings live under Mods in the list on the left. The framework's own options are under Settings, and its key bindings under Controls."));
 				ImGui::Spacing();
 				para(TR("AMF_ReadmeWhat", "It is one menu for every mod that asks for one. A mod does not have to know anything "
 						"about this framework's look, its themes or its controller support - it hands over its "
 						"settings and gets all of it."));
-				para(TR("AMF_ReadmeCompat", "Pages written for SKSE Menu Framework work here unchanged: the same API is answered, so "
-						"a mod built against either one is at home. Install only one of the two."));
-				para(TR("AMF_ReadmeAuthors", "For mod authors: the framework exports a C API and a single header. Register a section, "
-						"add pages to it, draw them with the ImGui calls the header wraps, and the menu does the "
-						"rest - layout, theme, font, translation, keyboard, controller and the on-screen keyboard."));
+				para(TR("AMF_ReadmeCompat", "This is the Oblivion Remastered build of the framework. Pages written for the Skyrim framework, or for SKSE Menu Framework's API, work here unchanged - the same exports are answered."));
+				para(TR("AMF_ReadmeAuthors", "For mod authors: one header, AMF.h, is the whole API. Register pages, draw them with Dear ImGui through the framework's own context, and the menu does the rest - layout, theme, font, translation, keyboard, controller and the on-screen keyboard. The header is safe when the framework is not installed."));
 				para(TR("AMF_ReadmeFiles", "Settings are kept in OBSE/Plugins/ApocryphaMenuFramework.ini, beside the plugin, and "
 						"everything on the Settings page writes to it. The log is in "
 						"Documents/My Games/Oblivion Remastered/OBSE/Logs/."));
@@ -1315,12 +1306,10 @@ namespace renderer
 				ImGui::Spacing();
 				bullet(TR("AMF_ManTrouble1", "A mod's page is missing: the mod has not registered one, or it needs a newer framework "
 						  "than the one installed. Its own log will say."));
-				bullet(TR("AMF_ManTrouble2", "The menu will not open: something else may have taken F1. Rebind it under Settings, or "
-						  "open the menu from the journal's System tab instead."));
+				bullet(TR("AMF_ManTrouble2", "The menu will not open: the game must be started through OBSE64 - without it the framework is not loaded at all and its log file does not exist. If it is loaded, something else may have taken F1; rebind it under Controls."));
 				bullet(TR("AMF_ManTrouble3", "A key does nothing inside the menu: another mod may be claiming it. The framework's log "
 						  "names the device and key whenever that happens."));
-				bullet(TR("AMF_ManTrouble5", "Text boxes take no typing: update the framework. Before 1.9.5 the engine was never asked "
-						  "to turn key presses into characters while the menu was up."));
+				bullet(TR("AMF_ManTrouble5", "The game reacts to a key, click or pad button you used inside the menu: that is a bug - while the menu is up the framework takes every one of them. Send the log with what you pressed and where the cursor was."));
 				ImGui::Spacing();
 				para(TR("AMF_ManTrouble4", "The log is at Documents/My Games/Oblivion Remastered/OBSE/Logs/ApocryphaMenuFramework.log. "
 						"Settings -> Log level decides how much it writes."));

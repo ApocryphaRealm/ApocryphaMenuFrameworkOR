@@ -1,55 +1,27 @@
-# CommonLibOB64 Plugin Template
+# Apocrypha Menu Framework for Oblivion Remastered
 
-This is a basic plugin template using CommonLibOB64.
+One in-game settings menu for every mod - the Apocrypha Menu Framework, on The Elder Scrolls IV: Oblivion Remastered.
+An OBSE64 plugin that draws Dear ImGui over the game's DirectX 12 renderer, with the same menu, themes, controls and mod
+API as the [Skyrim framework](https://github.com/ApocryphaRealm/ApocryphaMenuFramework).
 
-### Requirements
-* [XMake](https://xmake.io) [3.0.0+]
-* C++23 Compiler (MSVC, Clang-CL)
+* What the player gets and where the files go: `dist/README.txt`
+* What changed: `CHANGELOG.md`
 
-## Getting Started
-```bat
-git clone --recurse-submodules https://github.com/libxse/commonlibob64-template
-cd commonlibob64-template
-```
+## For mod authors
 
-### Build
-To build the project, run the following command:
-```bat
-xmake build
-```
+`sdk/include/AMF.h` is the whole public API: one header, nothing to link, safe when the framework is not installed.
+`sdk/example/main.cpp` is a complete mod with two pages built against it. Draw with the ordinary C++ Dear ImGui API
+(1.90.8, docking branch) through the framework's context, or with the cimgui `ig*` functions the framework exports.
 
-> ***Note:*** *This will generate a `build/windows/` directory in the **project's root directory** with the build output.*
+## Building
 
-### Build Output (Optional)
-If you want to redirect the build output, set one of or both of the following environment variables:
+* [xmake](https://xmake.io) 3.0+, a C++23 compiler (MSVC), and the submodule: `git clone --recurse-submodules`.
+* `xmake build ApocryphaMenuFramework` (the framework) and `xmake build AMFExample` (the SDK sample). Dear ImGui is
+  vendored under `extern/imgui`; MinHook comes from xmake's package registry.
+* The plugin goes to `OblivionRemastered\Binaries\Win64\OBSE\Plugins\` beside the game executable (with Mod Organizer
+  2, the Root Builder layout) together with `dist/OBSE/Plugins/*`.
 
-- Path to a Mod Manager mods folder: `XSE_TES4_MODS_PATH`
+## Licence
 
-  or
-
-- Path to a Oblivion install folder: `XSE_TES4_GAME_PATH`
-
-### Project Generation (Optional)
-If you use Visual Studio, run the following command:
-```bat
-xmake project -k vsxmake
-```
-
-> ***Note:*** *This will generate a `vsxmakeXXXX/` directory in the **project's root directory** using the latest version of Visual Studio installed on the system.*
-
-**Alternatively**, if you do not use Visual Studio, you can generate a `compile_commands.json` file for use with a laguage server like clangd in any code editor that supports it, like vscode:
-```bat
-xmake project -k compile_commands
-```
-
-> ***Note:*** *You must have a language server extension installed to make use of this file. I recommend `clangd`. Do not have more than one installed at a time as they will conflict with each other. I also recommend installing the `xmake` extension if available to make building the project easier.*
-
-### Upgrading Packages (Optional)
-If you want to upgrade the project's dependencies, run the following commands:
-```bat
-xmake repo --update
-xmake require --upgrade
-```
-
-## Documentation
-Please refer to the [Wiki](../../wiki/Home) for more advanced topics.
+GPL-3.0-or-later (`LICENSE`, `dist/NOTICE.md`); third-party notices in `dist/THIRD_PARTY_NOTICES.md`. `sdk/` is MIT so
+any mod can vendor it.

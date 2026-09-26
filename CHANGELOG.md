@@ -1,0 +1,45 @@
+# Changelog - Apocrypha Menu Framework for Oblivion Remastered
+
+Newest first. Versions are issued by the version gate; a number here is one a build earned by working in game.
+
+## 0.1.0 - 2026-09-26 (in development, not released)
+
+The Skyrim Apocrypha Menu Framework brought to The Elder Scrolls IV: Oblivion Remastered as an OBSE64 plugin.
+
+Added
+- The framework window over the game's DirectX 12 renderer: the DXGI factory is hooked before the game's WinMain, the
+  swap chain and its presenting command queue are taken as the game creates them, and Dear ImGui 1.90.8 (docking)
+  draws on every Present.
+- The Skyrim core, unchanged where the game did not force a change: the Mod Control Panel (side list, content pane,
+  tabs), the six themes and theme files with their art, the knotwork frame, the TrueType font atlas, the Controls page
+  with rebinding, the Help pages, the on-screen keyboard, personalization (aliases, order, favourites), per-save state,
+  the eleven translations, the hang watchdog and fast exit.
+- Input from the game window's messages (keyboard, mouse) and a per-frame XInput read (controller), feeding the same
+  decision and record queue the Skyrim engine hook fed; the game sees none of it while the menu is open, and a key
+  held across the opening still gets its release.
+- The pad gate: the game's own XInput reads are routed through the framework and answered with an empty pad while
+  the menu is open (and until every button is up after it closes), so A on a menu entry cannot also fire in the game.
+- The public API: `sdk/include/AMF.h`, a header-only, dependency-free way for other mods to add pages - safe without
+  the framework, C++ Dear ImGui through the shared context (`AMF_GetImGuiContext`, `AMF_GetImGuiAllocatorFunctions`,
+  `AMF_CheckImGuiABI`) or the cimgui `ig*` exports - and `sdk/example`, a complete mod built against it.
+- The C API and the complete cimgui 1.90.8dock export surface, so a mod written for the Skyrim framework registers
+  and draws the same way.
+- The driving tools `amf.menu`, `amf.process` and `amf.keybind`, registered with TestBench when it is present.
+- Settings, themes, fonts and translations live beside the plugin under `OBSE\Plugins\ApocryphaMenuFramework`; the log
+  is `Documents\My Games\Oblivion Remastered\OBSE\Logs\ApocryphaMenuFramework.log`, at info by default.
+
+Not yet (see PLAN.md, M3)
+- Opening from the game's pause menu; pausing the game while the menu is open; a controller button that opens the
+  menu; the game's HUD opacity; the startup curtain. Their settings rows are not drawn until each is wired.
+- In-process screen capture (the driving tool's `capture` op) on D3D12.
+
+Fixed during the night's testing
+- The controller was dead in the game for the whole session: the framework loaded xinput1_4.dll at plugin load, before
+  the game and Steam had set up their controller path. XInput is now resolved when the menu first opens, through the
+  game's own import.
+- Theme art (frame, background) did not load: the path still had Skyrim's `Data\` root. Two gate rules now refuse a
+  Skyrim root in an Oblivion repository's sources and shipped text.
+- The first D-pad press after opening only selected the list pane; navigation now starts on the open entry, and the
+  press that switches to controller mode counts.
+- A second mouse pointer over the menu (Unreal re-setting its arrow) and the menu's cursor jumping from the centre
+  on the first movement.
