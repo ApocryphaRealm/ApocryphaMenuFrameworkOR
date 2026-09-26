@@ -494,6 +494,17 @@ namespace input
 			{
 				// Unreal's mouse look reads raw input; swallowing it is what stops the camera. The delta is
 				// kept as the cursor's fallback source (see g_lastAbsMoveMs).
+				//
+				// ONLY the mouse (and keyboard) are swallowed. A controller the game reads as a raw HID device
+				// arrives here too, and taking its reports is a different thing from stopping the camera - the
+				// owner lost the controller after closing the menu on the first M2 run (2026-09-26).
+				RAWINPUTHEADER head{};
+				UINT headSize = sizeof(head);
+				if (::GetRawInputData(reinterpret_cast<HRAWINPUT>(a_lp), RID_HEADER, &head, &headSize, sizeof(RAWINPUTHEADER)) == static_cast<UINT>(-1) ||
+					head.dwType == RIM_TYPEHID)
+				{
+					return false;
+				}
 				RAWINPUT ri{};
 				UINT size = sizeof(ri);
 				if (::GetRawInputData(reinterpret_cast<HRAWINPUT>(a_lp), RID_INPUT, &ri, &size, sizeof(RAWINPUTHEADER)) != static_cast<UINT>(-1) &&
@@ -537,6 +548,24 @@ namespace input
 
 		if (open) { ::ClipCursor(nullptr); }   // Unreal clips the cursor to the viewport for mouse look; the menu needs it free
 
+		// The pad is read ONLY while the menu is up. Steam Input answers XInput inside the game process, and a second
+		// reader polling it every frame of normal play is the first suspect for the controller not working in the game
+		// after the menu closed (the owner, first M2 run, 2026-09-26). Nothing the framework does with the pad needs it
+		// while the menu is down - no controller button opens it yet - so the reads stop, and every button the menu saw
+		// is released so nothing is left held.
+		if (!open)
+		{
+			if (g_padButtons != 0)
+			{
+				for (std::uint32_t bit = 1; bit <= 0x8000; bit <<= 1)
+				{
+					if (g_padButtons & bit) { DecideButton(Dev::kGamepad, bit, false); }
+				}
+				g_padButtons = 0;
+			}
+			for (float& s : g_padSent) { s = 0.0f; }
+			return;
+		}
 		if (!g_xinput) { return; }
 		XINPUT_STATE st{};
 		WORD buttons = 0;

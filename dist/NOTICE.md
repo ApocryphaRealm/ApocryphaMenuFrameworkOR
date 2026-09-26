@@ -1,4 +1,4 @@
-# Apocrypha Menu Framework - copyright and licence
+# Apocrypha Menu Framework (Oblivion Remastered) - copyright and licence
 
 Copyright (C) 2026 ApocryphaRealm
 
@@ -16,11 +16,9 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 ## Why GPL-3.0-or-later
 
-The Skyrim 1.7.x build statically links CommonLibSSE-NG 7.2.0 (https://github.com/alandtse/CommonLibSSE-NG, commit
-7a60f4de794095d7b0f8928d1b930a52e9a7da83), GPL-3.0-or-later WITH its Modding Exception and GPL-3.0 Linking Exception,
-whose README requires a linking plugin to be GPL-3.0-or-later or GPL-compatible. From 2026-09-13 the whole work, both
-build lines and the source, is GPL-3.0-or-later; earlier versions carried an MIT licence in error.
+The plugin statically links CommonLibOB64 (https://github.com/libxse/commonlibob64, commit
+3e5ee4fcf96593125339d0035e92be9280eb3acd) and its commonlib-shared library (https://github.com/libxse/commonlib-shared,
+commit 9fbb74d628134ab4ea3a3cf5c0ed3f7eeabbd01d), both GPL-3.0; the modding exception that comes with the plugin
+template is kept in the source repository as `EXCEPTIONS`.
 
 Components under other licences, with their notices: `THIRD_PARTY_NOTICES.md`.
-
-Source code: https://github.com/ApocryphaRealm/ApocryphaMenuFramework
