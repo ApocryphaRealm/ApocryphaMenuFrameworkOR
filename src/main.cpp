@@ -13,6 +13,7 @@
 #include "Renderer.h"
 #include "Settings.h"
 #include "Strings.h"
+#include "Pause.h"
 #include "SystemRow.h"
 #include "Tick.h"
 
@@ -207,6 +208,16 @@ AMF_API bool AMF_CheckImGuiABI(const char* a_version, std::size_t a_io, std::siz
 	return ok;
 }
 
+namespace
+{
+	// the game thread, every frame (Tick.cpp): the System-menu row and the pause, both 1.0.4
+	void OnFrame()
+	{
+		systemrow::Tick();
+		pause::Tick();
+	}
+}
+
 OBSE_PLUGIN_LOAD(const OBSE::LoadInterface* a_obse)
 {
 	OBSE::Init(a_obse);
@@ -218,7 +229,7 @@ OBSE_PLUGIN_LOAD(const OBSE::LoadInterface* a_obse)
 	strings::Load();
 	input::Install();
 	// the game thread's frame tick: the System-menu row is added to the live System page from it (1.0.4)
-	tick::Install(&systemrow::Tick);
+	tick::Install(&OnFrame);
 
 	// OBSE64 runs Load before the game's WinMain, so the renderer does not exist yet: hook the DXGI factory
 	// exports now and pick up the swap chain and its command queue when the game creates them.

@@ -22,6 +22,28 @@ namespace ue
 		return UE::StaticFindObject<UE::UClass>(nullptr, nullptr, a_path);
 	}
 
+	// the first live object whose class is a_base or derives from it (not a class default object)
+	inline UE::UObject* FirstOf(UE::UClass* a_base)
+	{
+		auto* arr = UE::FUObjectArray::GetSingleton();
+		if (!arr || !a_base) {
+			return nullptr;
+		}
+		UE::UObject* found = nullptr;
+		arr->LockInternalArray();
+		const std::int32_t n = arr->GetObjectArrayNum();
+		for (std::int32_t i = 0; i < n && !found; ++i) {
+			auto* item = arr->IndexToObject(i);
+			auto* o = item ? reinterpret_cast<UE::UObject*>(item->object) : nullptr;
+			auto* cls = o ? o->GetClass() : nullptr;
+			if (cls && cls->IsChildOf(a_base) && o != cls->GetDefaultObject(false)) {
+				found = o;
+			}
+		}
+		arr->UnlockInternalArray();
+		return found;
+	}
+
 	// an object property's value, by name (null when the object has no such property or it is unset)
 	inline UE::UObject* ObjProp(UE::UObject* a_o, std::string_view a_name)
 	{

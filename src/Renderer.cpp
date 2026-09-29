@@ -620,7 +620,7 @@ namespace renderer
 			// curtain (keyed to Skyrim's MainMenu), pausing (PLAN.md M3) and the journal's System row (M3 puts AMF on
 			// the pause menu instead). A toggle that does nothing is worse than no toggle, so they are not drawn; the
 			// INI keys still read and save, so nothing is lost when each is wired.
-			constexpr bool kCurtainRow = false, kPauseRow = false, kSystemRow = true;   // the System row: 1.0.4
+			constexpr bool kCurtainRow = false, kPauseRow = true, kSystemRow = true;   // the System row and the pause: 1.0.4
 			if (kCurtainRow) {
 			if (widgets::Toggle(TR("AMF_BlackCurtain", "Black screen until the main menu is ready"), &values.startupCurtain))
 			{
@@ -1387,6 +1387,17 @@ namespace renderer
 					dw = pw - (pad.x * 2.0f) / display.x;
 					dh = ph - (pad.y * 2.0f) / display.y;
 					haveDefault = dw > 0.0f && dh > 0.0f;
+				}
+				if (!haveDefault)
+				{
+					// OBLIVION REMASTERED (1.0.4): no journal panel to measure - the window opened from the System row
+					// sits on the RIGHT of the screen so the page's rows on the left stay in view (the owner,
+					// 2026-09-29: "reposition itself ... so that it doesn't block out the view of the system rows to its
+					// left"). The numbers are where he dragged it to that day, read back from the saved hotkey profile:
+					// x 0.316, y 0.132, w 0.685, h 0.70 of the display (1011, 238, 2193 x 1260 at 3200x1800). A drag
+					// afterwards is remembered as the nested profile, as before.
+					dx = 0.315937f; dy = 0.132222f; dw = 0.685313f; dh = 0.70f;
+					haveDefault = true;
 				}
 			}
 			else

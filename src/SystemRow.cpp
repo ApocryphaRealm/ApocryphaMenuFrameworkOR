@@ -164,11 +164,90 @@ namespace systemrow
 			return true;
 		}
 
+		// ---- the page's own Buttons array and FocusIndex -----------------------------------------------------------
+		// The owner, 2026-09-29 12:3x: "the system row did appear, but I can't select it with the sticks or the D-pad,
+		// only with the mouse". The page walks ITS OWN TArray Buttons with FocusIndex (CreateButtonArray, DoesAllow-
+		// Navigation, BP_GetDesiredFocusTarget), not the rows' maps - so the row goes into that array too, and the
+		// focus index follows it when the row takes focus (the page binds OnButtonFocussed only for its own rows).
+		struct RawArray
+		{
+			UE::UObject** data;
+			std::int32_t  num, max;
+		};
+
+		RawArray* Buttons(UE::UObject* a_page)
+		{
+			const auto off = a_page ? reflect::Offset(a_page->GetClass(), "Buttons") : -1;
+			return off >= 0 ? reflect::At<RawArray>(a_page, off) : nullptr;
+		}
+
+		std::int32_t IndexIn(const RawArray* a_arr, UE::UObject* a_o)
+		{
+			for (std::int32_t i = 0; a_arr && a_arr->data && i < a_arr->num; ++i) {
+				if (a_arr->data[i] == a_o) return i;
+			}
+			return -1;
+		}
+
+		bool AppendButton(UE::UObject* a_page, UE::UObject* a_row)
+		{
+			auto* arr = Buttons(a_page);
+			if (!arr) {
+				logger::warn("system row: the page has no Buttons array - the D-pad will not reach the row");
+				return false;
+			}
+			if (IndexIn(arr, a_row) >= 0) return true;
+			if (arr->num < 0 || arr->max < arr->num) return false;
+			if (arr->num == arr->max) {
+				const std::int32_t newMax = arr->max + 4;
+				auto* grown = static_cast<UE::UObject**>(UE::FMemory::Realloc(arr->data, static_cast<std::size_t>(newMax) * sizeof(UE::UObject*)));
+				if (!grown) return false;
+				arr->data = grown;
+				arr->max = newMax;
+			}
+			arr->data[arr->num++] = a_row;
+			return true;
+		}
+
+		// Slate's own focus navigation: the explicit rules the page's CreateButtonArray gives its rows (UWidget::
+		// SetNavigationRuleExplicit, Up = 2, Down = 3 in EUINavigation), set on the wrapper AND its inner button -
+		// whichever of the two holds keyboard focus, pressing down on the last row now reaches ours and up comes back.
+		// (The owner, 2026-09-29 12:5x: the maps and the Buttons array alone did not give the D-pad the row.)
+		void Rule(UE::UObject* a_from, std::uint8_t a_direction, UE::UObject* a_to)
+		{
+			ue::Call c(a_from, L"SetNavigationRuleExplicit");
+			if (!c || !a_from || !a_to) return;
+			c.Set<std::uint8_t>("Direction", a_direction);
+			c.Set("InWidget", a_to);
+			c.Run();
+		}
+
+		void WireSlateNav(UE::UObject* a_last, UE::UObject* a_row)
+		{
+			constexpr std::uint8_t kUp = 2, kDown = 3;
+			Rule(a_last, kDown, a_row);
+			Rule(a_row, kUp, a_last);
+			auto* lastButton = ue::ObjProp(a_last, "SaveLoadButton");
+			auto* rowButton = ue::ObjProp(a_row, "SaveLoadButton");
+			if (lastButton && rowButton) {
+				Rule(lastButton, kDown, rowButton);
+				Rule(rowButton, kUp, lastButton);
+				Rule(lastButton, kDown, a_row);   // and across: a button's rule may name the wrapper
+			}
+		}
+
+		void SetFocusIndex(UE::UObject* a_page, std::int32_t a_index)
+		{
+			const auto off = a_page ? reflect::Offset(a_page->GetClass(), "FocusIndex") : -1;
+			if (off >= 0) *reflect::At<std::int32_t>(a_page, off) = a_index;
+		}
+
 		// ---- state ---------------------------------------------------------------------------------------------
 		struct Injected
 		{
 			UE::UObject* page;
 			UE::UObject* row;
+			UE::UObject* last;   // the game's last row, the one above ours
 		};
 		std::vector<Injected>    g_injected;   // game thread
 		std::vector<UE::UObject*> g_refused;   // pages this code gave up on (no second try, no log spam)
@@ -195,7 +274,15 @@ namespace systemrow
 			const std::string name = pe::FunctionName(a_fn);
 			if (name.find("CommonButtonBaseClicked") != std::string::npos || name == "OnButtonClicked__DelegateSignature") {
 				logger::info("system row: pressed ({}) - opening the framework", name);
-				renderer::SetMenuVisible(true, false);
+				renderer::SetMenuVisible(true, true);   // nested: placed to the right of the page's rows (Renderer.cpp, the nested default)
+			} else if (name.find("OnButtonFocussed") != std::string::npos || name == "OnFocus") {
+				for (const auto& i : g_injected) {
+					if (i.row == a_obj) {
+						if (const auto idx = IndexIn(Buttons(i.page), a_obj); idx >= 0) {
+							SetFocusIndex(i.page, idx);   // as the page does for its own rows in their focus handlers
+						}
+					}
+				}
 			} else {
 				static std::vector<std::string> seen;
 				if (seen.size() < 24 && std::find(seen.begin(), seen.end(), name) == seen.end()) {
@@ -329,7 +416,36 @@ namespace systemrow
 			} else {
 				logger::warn("system row: the direction keys could not be learned from the rows' maps - the row is added but the D-pad does not reach it");
 			}
-			g_injected.push_back({ a_page, row });
+			{
+				const bool inArray = AppendButton(a_page, row);
+				const auto* arr = Buttons(a_page);
+				logger::info("system row: the page's Buttons array {} the row ({} entries)", inArray ? "holds" : "does NOT hold", arr ? arr->num : -1);
+			}
+			// Register the row the way the game's rows are registered: the game's rows carry NavigableParent = the page and
+			// the navigation subsystem's handle, and are ACTIVATED (CommonActivatableWidget) - a row that is not active is
+			// not one the subsystem hands focus to (the owner, 12:5x: the D-pad still did not reach it with the maps and
+			// the Buttons array in place). Copied from the last row; then ActivateWidget on ours.
+			{
+				auto* cls = row->GetClass();
+				for (const char* prop : { "NavigableParent", "UINavigationSubsystem" }) {
+					const auto off = reflect::Offset(cls, prop);
+					const auto size = reflect::Size(cls, prop);
+					if (off >= 0 && size > 0 && reflect::Offset(last->GetClass(), prop) == off) {
+						std::memcpy(reflect::At<std::uint8_t>(row, off), reflect::At<std::uint8_t>(last, off), static_cast<std::size_t>(size));
+					}
+				}
+				ue::Call activate(row, L"ActivateWidget");
+				const bool activated = activate && activate.Run();
+				const auto offActive = reflect::Offset(cls, "bIsActive");
+				const bool lastActive = offActive >= 0 && *reflect::At<std::uint8_t>(last, offActive);
+				const bool rowActive = offActive >= 0 && *reflect::At<std::uint8_t>(row, offActive);
+				logger::info("system row: registered like {} (NavigableParent {}, ActivateWidget {}): last row active {}, ours active {}", ue::NameOf(last),
+					ue::NameOf(ue::ObjProp(row, "NavigableParent")), activated ? "called" : "NOT reflected", lastActive, rowActive);
+			}
+			WireSlateNav(last, row);
+			logger::info("system row: Slate navigation rules set (last row {} down -> ours, ours up -> it; {})", ue::NameOf(last),
+				ue::ObjProp(row, "SaveLoadButton") ? "inner buttons too" : "no inner SaveLoadButton");
+			g_injected.push_back({ a_page, row, last });
 			g_everInjected.store(true);
 			g_foundPath = ue::PathOf(a_page);
 			logger::info("system row: \"{}\" added to the System page {} as row {} of {}", pe::Utf8(UE::FString(kRowText)), ue::NameOf(a_page), rows.size() + 1, rows.size() + 1);
@@ -370,6 +486,15 @@ namespace systemrow
 		// forget pages that are gone
 		std::erase_if(g_injected, [](const Injected& i) { return !reflect::IsLive(i.page); });
 		std::erase_if(g_refused, [](UE::UObject* p) { return !reflect::IsLive(p); });
+		for (const auto& i : g_injected) {
+			if (!reflect::IsLive(i.row)) continue;
+			if (IndexIn(Buttons(i.page), i.row) < 0) {
+				if (AppendButton(i.page, i.row)) logger::info("system row: the page rebuilt its Buttons array - the row put back into it");
+			}
+			if (g_frame % 60 == 0 && reflect::IsLive(i.last)) {
+				WireSlateNav(i.last, i.row);   // the page may set its rows' rules again on each activation: ours are set again too
+			}
+		}
 		for (auto* page : reflect::Instances(pageClass)) {
 			const bool done = std::ranges::any_of(g_injected, [&](const Injected& i) { return i.page == page; });
 			if (done || std::ranges::find(g_refused, page) != g_refused.end()) continue;
