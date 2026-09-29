@@ -240,6 +240,43 @@ namespace AMF
 		return fn ? fn(a_which, a_x, a_y, a_clicked, a_live) : false;
 	}
 
+	// ---- key capture, for a bind button (Oblivion 1.0.2+) ------------------------------------------------------
+	// Arms the next press on one side as a binding. While armed, that press reaches neither the menu's navigation
+	// nor the game - so a controller player can bind B or A without the page backing out or activating. Escape
+	// cancels a keyboard capture; the controller side has no cancel button (every button is a valid binding), so
+	// give the page a Cancel button the mouse can click and rely on the timeout. The other side's input is left
+	// alone.
+	enum class CaptureState : std::int32_t { kIdle = 0, kWaiting = 1, kCaptured = 2, kCancelled = 3, kTimedOut = 4 };
+	// What was captured, when the state is kCaptured:
+	//   kind 0 keyboard   code = DirectInput scan code
+	//   kind 1 mouse      code = 0 left, 1 right, 2 middle, 3 thumb 1, 4 thumb 2
+	//   kind 2 pad        code = XInput button mask (0x1000 A, 0x2000 B, 0x0100 left shoulder, ...)
+	//   kind 3 stick      code = (stick << 4) | dir; stick 0 left, 1 right; dir 0 up, 1 down, 2 left, 3 right
+	//   kind 4 trigger    code = 0 left, 1 right
+	//   kind 5 wheel      code = 0 up, 1 down
+	inline void BeginKeyCapture(bool a_gamepadSide, std::int32_t a_timeoutMs = 8000)
+	{
+		AMF_H_FN("AMF_BeginKeyCapture", void (*)(bool, std::int32_t));
+		if (fn) { fn(a_gamepadSide, a_timeoutMs); }
+	}
+
+	inline void CancelKeyCapture()
+	{
+		AMF_H_FN("AMF_CancelKeyCapture", void (*)());
+		if (fn) { fn(); }
+	}
+
+	// Poll once a frame while waiting. A finished capture (captured / cancelled / timed out) is reported once, then
+	// the state returns to idle. kIdle without the framework (or with one older than 1.0.2).
+	inline CaptureState PollKeyCapture(std::int32_t* a_kind, std::int32_t* a_code)
+	{
+		AMF_H_FN("AMF_PollKeyCapture", std::int32_t (*)(std::int32_t*, std::int32_t*));
+		return fn ? static_cast<CaptureState>(fn(a_kind, a_code)) : CaptureState::kIdle;
+	}
+
+	// True when this framework has the capture calls (false on older ones - offer no bind button then).
+	inline bool HasKeyCapture() { return Proc("AMF_BeginKeyCapture") != nullptr; }
+
 	// The controller's on-screen keyboard for the text box the highlight is on (it also opens by itself when A
 	// is pressed on a text box). (Skyrim 1.8.9+, Oblivion 0.1.0+)
 	inline void ShowKeyboard()

@@ -114,6 +114,25 @@ namespace bindings
 	bool OfferGamepad(std::uint32_t a_mask, bool a_down);
 	bool OfferStick(int a_which, float a_x, float a_y);
 
+	// ---- a CONSUMER mod's capture (AMF_BeginKeyCapture, 2026-09-28) --------------------------
+	// Another mod's bind button (Ultimate Combat's, first): the next press on that side is recorded and
+	// swallowed - neither the menu's navigation nor the game sees it, so pressing B to bind "Dodge" does not
+	// back out of the page. Unlike the framework's own capture, B does NOT cancel on the controller side
+	// (B is a real binding for a consumer); Escape cancels the keyboard side, and a timeout ends either.
+	// The other side's input is untouched, so a mouse can still click the page's Cancel button.
+	// Kinds: 0 keyboard scan code, 1 mouse button (0 left .. 4 thumb 2), 2 pad button (XInput mask),
+	// 3 stick direction ((stick << 4) | dir, dir 0 up 1 down 2 left 3 right), 4 trigger (0 left, 1 right),
+	// 5 mouse wheel (0 up, 1 down).
+	enum class ConsumerCaptureState : std::int32_t { kIdle = 0, kWaiting = 1, kCaptured = 2, kCancelled = 3, kTimedOut = 4 };
+	void BeginConsumerCapture(bool a_gamepadSide, std::int32_t a_timeoutMs);
+	void CancelConsumerCapture();
+	bool ConsumerCapturing();
+	bool ConsumerCapturingGamepad();
+	// The state, and when captured the kind and code; reading a finished capture returns it to idle.
+	ConsumerCaptureState PollConsumerCapture(std::int32_t* a_kind, std::int32_t* a_code);
+	// The input hook's side: true when the event was consumed by the consumer capture.
+	bool OfferConsumer(std::int32_t a_kind, std::int32_t a_code, bool a_down, bool a_gamepadSide);
+
 	// Which action, if any, this input is bound to. kCount means none.
 	Action FromKeyboard(std::uint32_t a_scancode);
 	Action FromMouse(std::uint32_t a_button);

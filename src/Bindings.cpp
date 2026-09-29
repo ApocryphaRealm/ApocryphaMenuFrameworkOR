@@ -424,6 +424,90 @@ namespace bindings
 		return true;
 	}
 
+	namespace
+	{
+		std::mutex g_consumerLock;
+		bool       g_consumerArmed = false;
+		bool       g_consumerGamepad = false;
+		ConsumerCaptureState g_consumerState = ConsumerCaptureState::kIdle;
+		std::int32_t g_consumerKind = -1, g_consumerCode = -1;
+		std::chrono::steady_clock::time_point g_consumerDeadline{};
+
+		void ExpireLocked()
+		{
+			if (g_consumerArmed && std::chrono::steady_clock::now() > g_consumerDeadline) {
+				g_consumerArmed = false;
+				g_consumerState = ConsumerCaptureState::kTimedOut;
+				logger::info("bindings: a mod's key capture timed out");
+			}
+		}
+	}
+
+	void BeginConsumerCapture(bool a_gamepadSide, std::int32_t a_timeoutMs)
+	{
+		std::scoped_lock lock(g_consumerLock);
+		g_consumerArmed = true;
+		g_consumerGamepad = a_gamepadSide;
+		g_consumerState = ConsumerCaptureState::kWaiting;
+		g_consumerKind = g_consumerCode = -1;
+		g_consumerDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(std::clamp(a_timeoutMs, 1000, 30000));
+		logger::info("bindings: a mod armed a key capture on the {} side ({} ms)", a_gamepadSide ? "controller" : "keyboard", a_timeoutMs);
+	}
+
+	void CancelConsumerCapture()
+	{
+		std::scoped_lock lock(g_consumerLock);
+		if (g_consumerArmed) { g_consumerState = ConsumerCaptureState::kCancelled; }
+		g_consumerArmed = false;
+	}
+
+	bool ConsumerCapturing()
+	{
+		std::scoped_lock lock(g_consumerLock);
+		ExpireLocked();
+		return g_consumerArmed;
+	}
+
+	bool ConsumerCapturingGamepad()
+	{
+		std::scoped_lock lock(g_consumerLock);
+		return g_consumerArmed && g_consumerGamepad;
+	}
+
+	ConsumerCaptureState PollConsumerCapture(std::int32_t* a_kind, std::int32_t* a_code)
+	{
+		std::scoped_lock lock(g_consumerLock);
+		ExpireLocked();
+		const auto s = g_consumerState;
+		if (s == ConsumerCaptureState::kCaptured) {
+			if (a_kind) { *a_kind = g_consumerKind; }
+			if (a_code) { *a_code = g_consumerCode; }
+		}
+		if (s != ConsumerCaptureState::kWaiting) { g_consumerState = ConsumerCaptureState::kIdle; }
+		return s;
+	}
+
+	bool OfferConsumer(std::int32_t a_kind, std::int32_t a_code, bool a_down, bool a_gamepadSide)
+	{
+		std::scoped_lock lock(g_consumerLock);
+		ExpireLocked();
+		if (!g_consumerArmed || g_consumerGamepad != a_gamepadSide) { return false; }
+		// Presses on the capturing side are taken; a release passes (the A that armed the capture must reach ImGui).
+		if (!a_down) { return false; }
+		if (!a_gamepadSide && a_kind == 0 && a_code == static_cast<std::int32_t>(kDIKEscape)) {
+			g_consumerArmed = false;
+			g_consumerState = ConsumerCaptureState::kCancelled;
+			logger::info("bindings: a mod's key capture was cancelled with Escape");
+			return true;
+		}
+		g_consumerArmed = false;
+		g_consumerState = ConsumerCaptureState::kCaptured;
+		g_consumerKind = a_kind;
+		g_consumerCode = a_code;
+		logger::info("bindings: a mod's key capture took kind {} code {}", a_kind, a_code);
+		return true;
+	}
+
 	Action FromKeyboard(std::uint32_t a_scancode)
 	{
 		std::scoped_lock lock(g_lock);

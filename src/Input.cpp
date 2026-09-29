@@ -299,6 +299,15 @@ namespace input
 				logger::info("keybind capture: observed device {} code {}", static_cast<std::uint32_t>(a_dev), a_code);
 			}
 
+			// A CONSUMER MOD'S BIND BUTTON (AMF_BeginKeyCapture): the press is recorded and swallowed, so the
+			// menu's navigation never acts on it. Only presses are taken; a release passes, so the A that armed
+			// the capture is not left held in ImGui.
+			if (a_down && bindings::ConsumerCapturing())
+			{
+				const std::int32_t kind = a_dev == Dev::kKeyboard ? 0 : a_dev == Dev::kMouse ? 1 : 2;
+				if (bindings::OfferConsumer(kind, static_cast<std::int32_t>(a_code), true, a_dev == Dev::kGamepad)) { return true; }
+			}
+
 			// THE CONTROLS PAGE'S CAPTURE takes precedence while armed: the press it waits for must not
 			// also do whatever it is currently bound to, and the game never sees it either.
 			if (bindings::IsCapturing())
@@ -655,6 +664,8 @@ namespace input
 		case WM_XBUTTONDOWN: case WM_XBUTTONUP: case WM_XBUTTONDBLCLK:
 			return DecideButton(Dev::kMouse, GET_XBUTTON_WPARAM(a_wp) == XBUTTON1 ? 3u : 4u, a_msg != WM_XBUTTONUP);
 		case WM_MOUSEWHEEL:
+			if (open && bindings::ConsumerCapturing() &&
+				bindings::OfferConsumer(5, GET_WHEEL_DELTA_WPARAM(a_wp) > 0 ? 0 : 1, true, false)) { return true; }
 			if (!open) { return false; }
 			Enqueue({ Record::Kind::kMouseWheel, 0, false, 0.0f, static_cast<float>(GET_WHEEL_DELTA_WPARAM(a_wp)) / WHEEL_DELTA });
 			return true;
@@ -822,7 +833,35 @@ namespace input
 		}
 		g_padButtons = buttons;
 
-		if (open)
+		// A consumer's controller capture also takes the triggers and the stick directions, which are not buttons.
+		// Each fires once when it passes the threshold and re-arms only after it has come back near rest.
+		const bool padCapture = rc == ERROR_SUCCESS && bindings::ConsumerCapturingGamepad();
+		{
+			static bool s_trigger[2] = { false, false };
+			static bool s_stick = false;
+			if (padCapture)
+			{
+				const BYTE trig[2] = { st.Gamepad.bLeftTrigger, st.Gamepad.bRightTrigger };
+				for (int t = 0; t < 2; ++t)
+				{
+					if (!s_trigger[t] && trig[t] > 200) { s_trigger[t] = true; bindings::OfferConsumer(4, t, true, true); }
+					else if (trig[t] < 60) { s_trigger[t] = false; }
+				}
+				if (!s_stick)
+				{
+					for (int stick = 0; stick < 2 && !s_stick; ++stick)
+					{
+						const float x = axes[stick * 2], y = axes[stick * 2 + 1];
+						int dir = -1;
+						if (y > 0.75f) { dir = 0; } else if (y < -0.75f) { dir = 1; } else if (x < -0.75f) { dir = 2; } else if (x > 0.75f) { dir = 3; }
+						if (dir >= 0) { s_stick = true; bindings::OfferConsumer(3, (stick << 4) | dir, true, true); }
+					}
+				}
+			}
+			if (std::fabs(axes[0]) < 0.3f && std::fabs(axes[1]) < 0.3f && std::fabs(axes[2]) < 0.3f && std::fabs(axes[3]) < 0.3f) { s_stick = false; }
+		}
+
+		if (open && !padCapture)
 		{
 			for (std::uint32_t stick = 0; stick < 2; ++stick)
 			{

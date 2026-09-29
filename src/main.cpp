@@ -5,6 +5,7 @@
 // Address Library pre-check, the SKSE message listener) have no Oblivion counterpart and are not carried over.
 
 #include "AMF/API.h"
+#include "Bindings.h"
 #include "Input.h"
 #include "Keyboard.h"
 #include "Overlay.h"
@@ -131,6 +132,23 @@ AMF_API bool AMF_GetStick(int a_which, float* a_x, float* a_y, bool* a_clicked, 
 	if (a_clicked) { *a_clicked = clicked; }
 	if (a_live) { *a_live = live; }
 	return true;
+}
+
+// A consumer mod's bind button (2026-09-28, Ultimate Combat's rebuild): the next press on that side is recorded
+// and swallowed, so the menu's own navigation does not act on it (Bindings.h, the consumer capture).
+AMF_API void AMF_BeginKeyCapture(bool a_gamepadSide, std::int32_t a_timeoutMs)
+{
+	bindings::BeginConsumerCapture(a_gamepadSide, a_timeoutMs);
+}
+
+AMF_API void AMF_CancelKeyCapture()
+{
+	bindings::CancelConsumerCapture();
+}
+
+AMF_API std::int32_t AMF_PollKeyCapture(std::int32_t* a_kind, std::int32_t* a_code)
+{
+	return static_cast<std::int32_t>(bindings::PollConsumerCapture(a_kind, a_code));
 }
 
 AMF_API bool AMF_SetPageVisible(const char* a_modName, const char* a_pageName, bool a_visible)
