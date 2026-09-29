@@ -2,10 +2,13 @@
 
 Newest first. Versions are issued by the version gate; a number here is one a build earned by working in game.
 
-## 1.0.2 - 2026-09-29 - untested
+## 1.0.2 - 2026-09-29 - working
 
 ### Added
 - Key capture for other mods' bind buttons: AMF_BeginKeyCapture, AMF_PollKeyCapture and AMF_CancelKeyCapture (in sdk/include/AMF.h as AMF::BeginKeyCapture, PollKeyCapture, CancelKeyCapture and HasKeyCapture). A mod's Rebind button arms the capture and the next press becomes the binding - any key, mouse button, mouse wheel, controller button, trigger or stick direction. The press is swallowed: the menu does not navigate on it and the game never sees it, so B and A can be bound on a controller without backing out of the page. Esc cancels a keyboard capture; a timeout ends either side. Ultimate Combat Redux's Rebind buttons use it.
+
+### Fixed
+- The DLL no longer carries the build machine's folder paths (rule 45): /d1trimfile strips the project folder from __FILE__ and std::source_location, including CommonLibOB64's OBSE/Interfaces.h reached through the precompiled header, and /PDBALTPATH records only the PDB's file name. 1.0.1 carried both paths.
 
 ## 1.0.1 - 2026-09-26
 

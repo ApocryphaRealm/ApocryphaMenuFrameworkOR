@@ -1,5 +1,14 @@
 -- Apocrypha Menu Framework for The Elder Scrolls IV: Oblivion Remastered (OBSE64 plugin).
 -- Its own project and repository beside the Skyrim AMF; the name stays AMF (the owner, 2026-09-26).
+-- rule 45: no build-machine paths in any compiled object - set BEFORE includes() so CommonLibOB64's own library
+-- target gets it too (a std::source_location in an OBSE header reached through the PCH's absolute -FI path).
+-- /d1trimfile strips the project folder from __FILE__ and std::source_location. The flag is wrapped in a TABLE so
+-- xmake passes it as one quoted argument: a bare string is split on the path's spaces, and /d1trimfile:"<dir>"
+-- reaches cl with the quote characters in the prefix, which then matches nothing (measured 2026-09-29). No trailing
+-- separator. /PDBALTPATH:%_PDB% makes the debug directory record only the PDB's file name (it ships beside the DLL).
+add_cxflags({"/d1trimfile:$(projectdir)"}, {force = true, expand = false})
+add_shflags("/PDBALTPATH:%_PDB%", {force = true})
+
 includes("lib/commonlibob64")
 
 set_project("ApocryphaMenuFramework")
