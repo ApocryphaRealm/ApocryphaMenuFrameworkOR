@@ -2278,6 +2278,12 @@ namespace renderer
 			g_justOpened.store(true, std::memory_order_release);
 			g_applyGeometry.store(true, std::memory_order_release);
 		}
+		else
+		{
+			// A mod's bind button capture ends with the window: left armed, a keyboard-side capture closed from
+			// the pad would take the next key in the game as the binding and hide it from the game.
+			bindings::CancelConsumerCapture();
+		}
 
 		logger::info("Framework window {}", now ? "shown" : "hidden");
 	}
@@ -2317,6 +2323,10 @@ namespace renderer
 		{
 			g_justOpened.store(true, std::memory_order_release);
 			g_applyGeometry.store(true, std::memory_order_release);
+		}
+		else
+		{
+			bindings::CancelConsumerCapture();   // as in ToggleMainWindow: a capture never outlives the window
 		}
 		logger::info("Framework window {} ({})", a_visible ? "shown" : "hidden",
 			a_nested ? "nested in the game's System menu" : "external/DevBench");

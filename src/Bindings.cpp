@@ -457,7 +457,10 @@ namespace bindings
 	void CancelConsumerCapture()
 	{
 		std::scoped_lock lock(g_consumerLock);
-		if (g_consumerArmed) { g_consumerState = ConsumerCaptureState::kCancelled; }
+		if (g_consumerArmed) {
+			g_consumerState = ConsumerCaptureState::kCancelled;
+			logger::info("bindings: a mod's key capture was cancelled (the mod asked, or the window closed)");
+		}
 		g_consumerArmed = false;
 	}
 

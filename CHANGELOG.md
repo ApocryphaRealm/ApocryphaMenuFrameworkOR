@@ -2,6 +2,11 @@
 
 Newest first. Versions are issued by the version gate; a number here is one a build earned by working in game.
 
+## 1.0.3 - 2026-09-29 - working
+
+### Fixed
+- Closing the menu now cancels a mod's bind-button capture that is still waiting. Before, a keyboard-side capture left armed by closing the menu from the controller took the next key or click in the game (within the mod's timeout, 8 s for Ultimate Combat Redux) as the binding and hid that press from the game. The mod's next poll reports cancelled, so its Rebind button simply comes back.
+
 ## 1.0.2 - 2026-09-29 - working
 
 ### Added
