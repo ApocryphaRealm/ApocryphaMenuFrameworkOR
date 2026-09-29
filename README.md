@@ -12,6 +12,8 @@ API as the [Skyrim framework](https://github.com/ApocryphaRealm/ApocryphaMenuFra
 `sdk/include/AMF.h` is the whole public API: one header, nothing to link, safe when the framework is not installed.
 `sdk/example/main.cpp` is a complete mod with two pages built against it. Draw with the ordinary C++ Dear ImGui API
 (1.90.8, docking branch) through the framework's context, or with the cimgui `ig*` functions the framework exports.
+A bind button uses the key capture calls (1.0.2+): `AMF::BeginKeyCapture`, then `AMF::PollKeyCapture` once a frame until
+it reports captured, cancelled or timed out; `AMF::HasKeyCapture` says whether the installed framework has them.
 
 ## Building
 

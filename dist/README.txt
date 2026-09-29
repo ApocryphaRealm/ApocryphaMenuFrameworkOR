@@ -20,6 +20,9 @@ WHAT YOU GET
     to switch on.
   * While the menu is open the game does not see your keys, mouse or clicks, so nothing you do
     in the menu also happens in the game.
+  * Rebind buttons on other mods' pages: press Rebind, then the key, mouse button, mouse wheel,
+    controller button, trigger or stick direction you want. That press only sets the binding -
+    the menu and the game ignore it, so B and A can be bound too. Esc cancels on the keyboard.
 
 USING IT WITH A CONTROLLER
 --------------------------
