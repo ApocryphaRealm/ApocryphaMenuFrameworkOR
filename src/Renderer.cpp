@@ -620,7 +620,7 @@ namespace renderer
 			// curtain (keyed to Skyrim's MainMenu), pausing (PLAN.md M3) and the journal's System row (M3 puts AMF on
 			// the pause menu instead). A toggle that does nothing is worse than no toggle, so they are not drawn; the
 			// INI keys still read and save, so nothing is lost when each is wired.
-			constexpr bool kCurtainRow = false, kPauseRow = false, kSystemRow = false;
+			constexpr bool kCurtainRow = false, kPauseRow = false, kSystemRow = true;   // the System row: 1.0.4
 			if (kCurtainRow) {
 			if (widgets::Toggle(TR("AMF_BlackCurtain", "Black screen until the main menu is ready"), &values.startupCurtain))
 			{
@@ -662,12 +662,11 @@ namespace renderer
 				logger::info("settings page: system menu row -> {}", values.systemMenuRow);
 				settings::Save();
 			}
-			ImGui::TextWrapped("%s", TR("AMF_SystemRowHelp", "On: a SKSE MENUS row is added to the journal's System tab, beside SAVE, "
-							   "LOAD and SETTINGS, and opens this menu sized to the journal around it. "
-							   "The row is added to the menu as it opens rather than by replacing any "
-							   "game file, so it works with whatever menu artwork you have installed. "
-							   "Off: the game's menu is left completely untouched and this menu is "
-							   "reached by its key alone."));
+			ImGui::TextWrapped("%s", TR("AMF_SystemRowHelpOR", "On: an Apocrypha Menu Framework row is added to the game's System page, "
+							   "under Save, Load and Quit, and opens this menu. The row is added to the page as it "
+							   "opens rather than by replacing any game file, so it works with whatever menu artwork "
+							   "you have installed. Off: the game's page is left completely untouched and this menu "
+							   "is reached by its key alone. Takes effect at the next launch."));
 			ImGui::TextDisabled("%s", TR("AMF_TakesEffectJournal", "Takes effect the next time the journal is opened."));
 			ImGui::Spacing();
 			}

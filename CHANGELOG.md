@@ -2,6 +2,12 @@
 
 Newest first. Versions are issued by the version gate; a number here is one a build earned by working in game.
 
+## 1.0.4 - 2026-09-29 - untested
+
+### Added
+- A row in the game's own System page: "Apocrypha Menu Framework", under Save, Load and Quit, reached with the D-pad like the game's rows and opening the framework when pressed. The row is created in the live page from the same widget class as the game's rows (its look and sound are the game's), added to the page's panel with the last row's layout, and spliced into the rows' controller navigation; nothing bound on the page is touched and no game file is replaced, so it works with any menu artwork. The "Mod settings in the game's System menu" switch on the Settings page turns it off (Menus.bSystemMenuRow; a change takes effect at the next launch).
+- A per-frame game-thread tick (the message pump's PeekMessageW import, chained) and the reflection helpers the row needs (ProcessEvent watch by class through a vtable-slot swap, property offsets by name), brought over from Tween Menu for Oblivion Remastered.
+
 ## 1.0.3 - 2026-09-29 - working
 
 ### Fixed

@@ -42,6 +42,10 @@
 
 namespace systemrow
 {
+	// Oblivion Remastered (1.0.4): the row is created in the live System page from the game thread's frame tick
+	// (Tick.cpp) - see SystemRow.cpp for how the page, its rows and their controller navigation are handled.
+	void Tick();
+
 	// Registers the menu sink. Safe to call more than once; returns false only when the UI
 	// singleton is not ready yet, so the caller can retry at a later SKSE message.
 	bool Install();

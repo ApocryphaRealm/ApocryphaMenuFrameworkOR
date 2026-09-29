@@ -1,5 +1,6 @@
 #pragma once
 
+#include <UE/Unreal.h>
 #include <RE/Oblivion.h>
 #include <OBSE/OBSE.h>
 

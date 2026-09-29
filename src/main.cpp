@@ -13,6 +13,8 @@
 #include "Renderer.h"
 #include "Settings.h"
 #include "Strings.h"
+#include "SystemRow.h"
+#include "Tick.h"
 
 #include <imgui.h>
 
@@ -215,6 +217,8 @@ OBSE_PLUGIN_LOAD(const OBSE::LoadInterface* a_obse)
 	settings::Load();
 	strings::Load();
 	input::Install();
+	// the game thread's frame tick: the System-menu row is added to the live System page from it (1.0.4)
+	tick::Install(&systemrow::Tick);
 
 	// OBSE64 runs Load before the game's WinMain, so the renderer does not exist yet: hook the DXGI factory
 	// exports now and pick up the swap chain and its command queue when the game creates them.
