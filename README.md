@@ -1,4 +1,4 @@
-# Apocrypha Menu Framework for Oblivion Remastered
+# Apocrypha Menu Framework (Oblivion Remastered)
 
 One in-game settings menu for every mod - the Apocrypha Menu Framework, on The Elder Scrolls IV: Oblivion Remastered.
 An OBSE64 plugin that draws Dear ImGui over the game's DirectX 12 renderer, with the same menu, themes, controls and mod

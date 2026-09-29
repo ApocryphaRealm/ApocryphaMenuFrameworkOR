@@ -1,4 +1,4 @@
-# Changelog - Apocrypha Menu Framework for Oblivion Remastered
+# Changelog - Apocrypha Menu Framework (Oblivion Remastered)
 
 Newest first. Versions are issued by the version gate; a number here is one a build earned by working in game.
 
