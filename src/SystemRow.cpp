@@ -20,6 +20,12 @@
 // any other plugin that changes the page. Every step is checked and logged, and a page whose shape is not the one
 // above (a game patch, another mod's rebuild) gets no row and a warning - never a half-wired one.
 //
+// PROVEN 2026-09-29 (the owner, 12:5x: "the system row for AMF works properly now"): what made the D-pad reach the row
+// was ORDER. The navigation subsystem reads a row's parent, handle and map when the row is CONSTRUCTED (added to a
+// panel); edits afterwards are invisible to it, though every reflected property looks right. So the new row is given
+// its parent, handle and Up entry before it is added, and the last game row is taken out of the panel and put back
+// (constructed again, its Down entry now leading to ours) just before ours goes in, which also keeps the order.
+//
 // The map surgery: TMap<enum, TObjectPtr<UWidget>> is a TSet<TPair<uint8, UObject*>> - a sparse array of 24-byte
 // elements (key, value, hash-next, hash-bucket), an inline bit array of allocation flags, a free list, and a hash
 // whose bucket count is 1 until the map has four elements (UE's TSetAllocator). The load row's map, read raw in
@@ -268,10 +274,30 @@ namespace systemrow
 		}
 
 		// ProcessEvent on every row of the class: our row's click opens the framework
+		bool Interesting(const std::string& a_name)
+		{
+			return a_name.find("Navigate") != std::string::npos || a_name.find("Focus") != std::string::npos ||
+			       a_name.find("Activat") != std::string::npos || a_name.find("Hover") != std::string::npos ||
+			       a_name.find("Button") != std::string::npos || a_name.find("Allow") != std::string::npos ||
+			       a_name.find("Input") != std::string::npos || a_name.find("Commited") != std::string::npos;
+		}
+
+		// the page's events (diagnosis, 2026-09-29: which widget the D-pad drives - the page, a row, or its button)
+		void OnPageEvent(UE::UObject* a_obj, UE::UFunction* a_fn, void*)
+		{
+			const std::string name = pe::FunctionName(a_fn);
+			if (!Interesting(name) || name == "Tick") return;
+			const auto off = reflect::Offset(a_obj->GetClass(), "FocusIndex");
+			logger::debug("system row: PAGE event {} (FocusIndex {})", name, off >= 0 ? *reflect::At<std::int32_t>(a_obj, off) : -1);
+		}
+
 		void OnRowEvent(UE::UObject* a_obj, UE::UFunction* a_fn, void*)
 		{
-			if (!IsOurRow(a_obj)) return;
 			const std::string name = pe::FunctionName(a_fn);
+			if (Interesting(name) && name.find("Clicked") == std::string::npos) {
+				logger::debug("system row: ROW event {} on {}{}", name, ue::NameOf(a_obj), IsOurRow(a_obj) ? " (ours)" : "");
+			}
+			if (!IsOurRow(a_obj)) return;
 			if (name.find("CommonButtonBaseClicked") != std::string::npos || name == "OnButtonClicked__DelegateSignature") {
 				logger::info("system row: pressed ({}) - opening the framework", name);
 				renderer::SetMenuVisible(true, true);   // nested: placed to the right of the page's rows (Renderer.cpp, the nested default)
@@ -307,6 +333,48 @@ namespace systemrow
 			return out;
 		}
 
+		// a slot's layout (padding, size, alignments) read off one slot and applied to another through its setters
+		struct SlotLayout
+		{
+			std::vector<std::pair<std::string, std::vector<std::uint8_t>>> values;
+			void Read(UE::UObject* a_slot)
+			{
+				values.clear();
+				for (const char* prop : { "Padding", "Size", "HorizontalAlignment", "VerticalAlignment" }) {
+					const auto off = reflect::Offset(a_slot->GetClass(), prop);
+					const auto size = reflect::Size(a_slot->GetClass(), prop);
+					if (off >= 0 && size > 0) {
+						auto* src = reflect::At<std::uint8_t>(a_slot, off);
+						values.emplace_back(prop, std::vector<std::uint8_t>(src, src + size));
+					}
+				}
+			}
+			void Apply(UE::UObject* a_slot) const
+			{
+				for (const auto& [prop, bytes] : values) {
+					const wchar_t* setter = prop == "Padding" ? L"SetPadding" : prop == "Size" ? L"SetSize" : prop == "HorizontalAlignment" ? L"SetHorizontalAlignment" : L"SetVerticalAlignment";
+					ue::Call set(a_slot, setter);
+					void* first = set ? set.First() : nullptr;
+					if (first) {
+						std::memcpy(first, bytes.data(), bytes.size());
+						set.Run();
+					}
+				}
+			}
+		};
+
+		UE::UObject* AddToPanel(UE::UObject* a_panel, UE::UObject* a_widget)
+		{
+			for (const wchar_t* fn : { L"AddChild", L"AddChildToVerticalBox", L"AddChildToHorizontalBox", L"AddChildToScrollBox", L"AddChildToOverlay", L"AddChildToWrapBox", L"AddChildToStackBox" }) {
+				ue::Call add(a_panel, fn);
+				if (!add) continue;
+				add.Set("Content", a_widget);
+				add.Run();
+				return add.Get<UE::UObject*>("ReturnValue");
+			}
+			return nullptr;
+		}
+
 		bool Inject(UE::UObject* a_page)
 		{
 			auto* quit = ue::ObjProp(a_page, "settings_system_quit_button");
@@ -338,7 +406,21 @@ namespace systemrow
 				for (const auto& [k, v] : NavEntries(rows[i])) e += std::format("{}->{} ", k, ue::NameOf(v));
 				logger::info("system row: row {} {} nav [{}]", i, ue::NameOf(rows[i]), e);
 			}
-			// create
+			if (upKey < 0 || downKey < 0) {
+				logger::warn("system row: the direction keys could not be learned from the rows' maps - no row");
+				return false;
+			}
+			auto* last = rows.back();
+			auto* first = rows.front();
+			if (last != quit) {
+				logger::info("system row: the last row is {} (not Quit) - the new row goes under it", ue::NameOf(last));
+			}
+			auto* lastSlot = ue::ObjProp(last, "Slot");
+			if (!lastSlot) return false;
+			SlotLayout layout;
+			layout.Read(lastSlot);
+
+			// ---- create, and set everything the subsystem reads at construction BEFORE the row is constructed ----
 			auto* lib = ue::Class(L"/Script/UMG.WidgetBlueprintLibrary");
 			auto* libCdo = lib ? lib->GetDefaultObject(false) : nullptr;
 			ue::Call create(libCdo, L"Create");
@@ -354,32 +436,49 @@ namespace systemrow
 				logger::warn("system row: Create returned no widget - no row");
 				return false;
 			}
-			// add to the panel: the generic AddChild, else the panel type's own
-			UE::UObject* slot = nullptr;
-			for (const wchar_t* fn : { L"AddChild", L"AddChildToVerticalBox", L"AddChildToHorizontalBox", L"AddChildToScrollBox", L"AddChildToOverlay", L"AddChildToWrapBox", L"AddChildToStackBox" }) {
-				ue::Call add(panel, fn);
-				if (!add) continue;
-				add.Set("Content", row);
-				add.Run();
-				slot = add.Get<UE::UObject*>("ReturnValue");
-				logger::info("system row: {} on {} ({}) -> slot {}", pe::Utf8(UE::FString(fn)), ue::NameOf(panel), ue::NameOf(panel->GetClass()), slot ? ue::NameOf(slot->GetClass()) : "none");
-				break;
+			{
+				auto* cls = row->GetClass();
+				for (const char* prop : { "NavigableParent", "UINavigationSubsystem" }) {   // the page, and the subsystem's handle, as the game's rows carry them
+					const auto off = reflect::Offset(cls, prop);
+					const auto size = reflect::Size(cls, prop);
+					if (off >= 0 && size > 0 && reflect::Offset(last->GetClass(), prop) == off) {
+						std::memcpy(reflect::At<std::uint8_t>(row, off), reflect::At<std::uint8_t>(last, off), static_cast<std::size_t>(size));
+					}
+				}
 			}
+			auto* wrap = NavGet(last, static_cast<std::uint64_t>(downKey));   // did the last row lead round to the first?
+			bool ok = NavSet(row, static_cast<std::uint64_t>(upKey), last);
+			ok = NavSet(last, static_cast<std::uint64_t>(downKey), row) && ok;
+			if (wrap) {
+				ok = NavSet(row, static_cast<std::uint64_t>(downKey), wrap) && ok;
+				if (NavGet(first, static_cast<std::uint64_t>(upKey)) == last) {
+					ok = NavSet(first, static_cast<std::uint64_t>(upKey), row) && ok;
+				}
+			}
+			logger::info("system row: navigation {} (up key {}, down key {}, {} wrapped round to {})", ok ? "wired" : "PARTLY wired", upKey, downKey,
+				ue::NameOf(last), wrap ? ue::NameOf(wrap) : "nothing");
+
+			// ---- the last row out of the panel and back (constructed again, with its map now leading to ours), then ours ----
+			{
+				ue::Call remove(last, L"RemoveFromParent");
+				const bool removed = remove && remove.Run();
+				auto* newLastSlot = removed ? AddToPanel(panel, last) : nullptr;
+				if (newLastSlot) {
+					layout.Apply(newLastSlot);
+				}
+				logger::info("system row: {} taken out of the panel and put back ({}) so it is constructed again", ue::NameOf(last),
+					newLastSlot ? ue::NameOf(newLastSlot->GetClass()) : "FAILED - it may be gone from the page");
+			}
+			auto* slot = AddToPanel(panel, row);
 			if (!slot) {
 				logger::warn("system row: the panel {} ({}) takes no child through any reflected AddChild - no row", ue::NameOf(panel), ue::NameOf(panel->GetClass()));
 				return false;
 			}
-			// the last row's slot layout, setter by setter
-			for (const auto& [prop, setter] : std::initializer_list<std::pair<const char*, const wchar_t*>>{
-					 { "Padding", L"SetPadding" }, { "Size", L"SetSize" }, { "HorizontalAlignment", L"SetHorizontalAlignment" }, { "VerticalAlignment", L"SetVerticalAlignment" } }) {
-				const auto off = reflect::Offset(quitSlot->GetClass(), prop);
-				const auto size = reflect::Size(quitSlot->GetClass(), prop);
-				ue::Call set(slot, setter);
-				void* first = set ? set.First() : nullptr;
-				if (off >= 0 && size > 0 && first) {
-					std::memcpy(first, reflect::At<std::uint8_t>(quitSlot, off), static_cast<std::size_t>(size));
-					set.Run();
-				}
+			layout.Apply(slot);
+			logger::info("system row: added to {} ({}) -> slot {}", ue::NameOf(panel), ue::NameOf(panel->GetClass()), ue::NameOf(slot->GetClass()));
+			for (auto* w : { last, row }) {
+				ue::Call sync(w, L"ForceSynchronizeProperties");
+				if (sync) sync.Run();
 			}
 			// the text: an FText the engine makes from our string, handed to the row's own SetButtonText
 			{
@@ -398,53 +497,12 @@ namespace systemrow
 					logger::warn("system row: no Conv_StringToText / SetButtonText - the row has no text");
 				}
 			}
-			// navigation
-			auto* last = rows.back();
-			auto* first = rows.front();
-			if (upKey >= 0 && downKey >= 0) {
-				auto* wrap = NavGet(last, static_cast<std::uint64_t>(downKey));   // did the last row lead round to the first?
-				bool ok = NavSet(last, static_cast<std::uint64_t>(downKey), row);
-				ok = NavSet(row, static_cast<std::uint64_t>(upKey), last) && ok;
-				if (wrap) {
-					ok = NavSet(row, static_cast<std::uint64_t>(downKey), wrap) && ok;
-					if (NavGet(first, static_cast<std::uint64_t>(upKey)) == last) {
-						ok = NavSet(first, static_cast<std::uint64_t>(upKey), row) && ok;
-					}
-				}
-				logger::info("system row: navigation {} (up key {}, down key {}, {} wrapped round to {})", ok ? "wired" : "PARTLY wired", upKey, downKey,
-					ue::NameOf(last), wrap ? ue::NameOf(wrap) : "nothing");
-			} else {
-				logger::warn("system row: the direction keys could not be learned from the rows' maps - the row is added but the D-pad does not reach it");
-			}
 			{
 				const bool inArray = AppendButton(a_page, row);
 				const auto* arr = Buttons(a_page);
 				logger::info("system row: the page's Buttons array {} the row ({} entries)", inArray ? "holds" : "does NOT hold", arr ? arr->num : -1);
 			}
-			// Register the row the way the game's rows are registered: the game's rows carry NavigableParent = the page and
-			// the navigation subsystem's handle, and are ACTIVATED (CommonActivatableWidget) - a row that is not active is
-			// not one the subsystem hands focus to (the owner, 12:5x: the D-pad still did not reach it with the maps and
-			// the Buttons array in place). Copied from the last row; then ActivateWidget on ours.
-			{
-				auto* cls = row->GetClass();
-				for (const char* prop : { "NavigableParent", "UINavigationSubsystem" }) {
-					const auto off = reflect::Offset(cls, prop);
-					const auto size = reflect::Size(cls, prop);
-					if (off >= 0 && size > 0 && reflect::Offset(last->GetClass(), prop) == off) {
-						std::memcpy(reflect::At<std::uint8_t>(row, off), reflect::At<std::uint8_t>(last, off), static_cast<std::size_t>(size));
-					}
-				}
-				ue::Call activate(row, L"ActivateWidget");
-				const bool activated = activate && activate.Run();
-				const auto offActive = reflect::Offset(cls, "bIsActive");
-				const bool lastActive = offActive >= 0 && *reflect::At<std::uint8_t>(last, offActive);
-				const bool rowActive = offActive >= 0 && *reflect::At<std::uint8_t>(row, offActive);
-				logger::info("system row: registered like {} (NavigableParent {}, ActivateWidget {}): last row active {}, ours active {}", ue::NameOf(last),
-					ue::NameOf(ue::ObjProp(row, "NavigableParent")), activated ? "called" : "NOT reflected", lastActive, rowActive);
-			}
 			WireSlateNav(last, row);
-			logger::info("system row: Slate navigation rules set (last row {} down -> ours, ours up -> it; {})", ue::NameOf(last),
-				ue::ObjProp(row, "SaveLoadButton") ? "inner buttons too" : "no inner SaveLoadButton");
 			g_injected.push_back({ a_page, row, last });
 			g_everInjected.store(true);
 			g_foundPath = ue::PathOf(a_page);
@@ -483,6 +541,8 @@ namespace systemrow
 		}
 		auto* pageClass = ue::Class(kPageClass);
 		if (!pageClass) return;
+		static bool pageWatched = false;
+		if (!pageWatched) pageWatched = pe::Watch(pageClass, &OnPageEvent);
 		// forget pages that are gone
 		std::erase_if(g_injected, [](const Injected& i) { return !reflect::IsLive(i.page); });
 		std::erase_if(g_refused, [](UE::UObject* p) { return !reflect::IsLive(p); });
