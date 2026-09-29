@@ -58,6 +58,10 @@ namespace settings
 		// time, actors, weather and cooldowns stop. OFF by default, so nothing changes for anyone who does not turn
 		// it on. Opened from the System row the game is already paused by the journal; this adds nothing there.
 		bool pauseGameWhileOpen = false;
+		// [Menu] bKeepCameraAwake (the owner, 2026-09-29): while this window is open the game's idle vanity camera never
+		// takes over (it rotates the view and hides the HUD, which is what a HUD mod's page is there to show); its own
+		// timer is stopped while the window is open and restarted, as after the game's pause menu, when it closes.
+		bool keepCameraAwake = true;
 
 		// [Display]
 		float textScale = 1.30f;         // extra font multiplier on top of the resolution scale (the author, 1.0.2 feedback round)

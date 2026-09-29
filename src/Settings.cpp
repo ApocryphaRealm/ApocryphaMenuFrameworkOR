@@ -127,6 +127,7 @@ namespace settings
 			ReadNumber(entries, "Input.uToggleKey", g_values.toggleKey);
 			ReadBool(entries, "Input.bOnScreenKeyboard", g_values.onScreenKeyboard);
 			ReadBool(entries, "Menu.bPauseGame", g_values.pauseGameWhileOpen);
+			ReadBool(entries, "Menu.bKeepCameraAwake", g_values.keepCameraAwake);
 			ReadBool(entries, "Menus.bSystemMenuRow", g_values.systemMenuRow);
 
 			// Window profiles. Each field defaults to -1, which the renderer reads as "this profile
@@ -225,6 +226,8 @@ namespace settings
 				"; world time, actors and weather stop until it closes. 0 (the default) leaves the\n"
 				"; game running behind it.\n"
 				"bPauseGame=" << (g_values.pauseGameWhileOpen ? 1 : 0) << "\n"
+				"; Keep the camera awake: 1 = the idle vanity camera never takes over while this window is open (it hides the HUD).\n"
+				"bKeepCameraAwake=" << (g_values.keepCameraAwake ? 1 : 0) << "\n"
 				"\n"
 				"[Display]\n"
 				"; Extra text scale on top of the automatic resolution scaling.\n"

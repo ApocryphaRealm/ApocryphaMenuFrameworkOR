@@ -58,9 +58,68 @@ namespace pause
 		}
 	}
 
+	namespace
+	{
+		// ---- the idle vanity camera, kept off while the window is open ([Menu] bKeepCameraAwake) ----
+		UE::UObject* g_cameraManager = nullptr;
+		UE::UObject* g_controller = nullptr;
+		ULONGLONG    g_vanityAt = 0;
+		bool         g_vanityHeld = false;   // the timer is stopped by this code (restarted on close)
+
+		UE::UObject* Live(UE::UObject*& a_cache, const wchar_t* a_class)
+		{
+			if (a_cache && reflect::IsLive(a_cache)) return a_cache;
+			auto* cls = ue::Class(a_class);
+			a_cache = cls ? ue::FirstOf(cls) : nullptr;
+			return a_cache;
+		}
+
+		bool VanityCameraUp(UE::UObject* a_cm)
+		{
+			ue::Call c(a_cm, L"GetCurrentCameraTag");
+			if (!c || !c.Run()) return false;
+			const auto* name = static_cast<const UE::FName*>(c.At("ReturnValue"));   // FGameplayTag: its FName first
+			return name && pe::Utf8(name->ToString()).find("Vanity") != std::string::npos;
+		}
+
+		void Vanity(bool a_visible, bool a_wasVisible)
+		{
+			if (!settings::Get().keepCameraAwake) {
+				if (g_vanityHeld) { a_visible = false; }   // the switch went off: let the timer go
+				else return;
+			}
+			const ULONGLONG now = GetTickCount64();
+			if (a_visible) {
+				if (!a_wasVisible || now - g_vanityAt >= 1000) {   // on open, then once a second (the game may start it again)
+					g_vanityAt = now;
+					if (auto* cm = Live(g_cameraManager, L"/Script/Altar.VAltarPlayerCameraManager")) {
+						ue::Call stop(cm, L"StopVanityCameraTimer");
+						if (stop && stop.Run() && !g_vanityHeld) {
+							g_vanityHeld = true;
+							logger::info("camera: the idle vanity camera's timer is stopped while the window is open");
+						}
+						if (VanityCameraUp(cm)) {
+							if (auto* pc = Live(g_controller, L"/Script/Altar.VAltarPlayerController")) {
+								ue::Call leave(pc, L"ExitVanityCamera");
+								if (leave && leave.Run()) logger::info("camera: the vanity camera was up - left it, the HUD is back");
+							}
+						}
+					}
+				}
+			} else if (g_vanityHeld) {
+				g_vanityHeld = false;
+				if (auto* cm = Live(g_cameraManager, L"/Script/Altar.VAltarPlayerCameraManager")) {
+					ue::Call restart(cm, L"RestartFromPauseVanityCameraTimer");   // what the game does after its own pause menu
+					if (restart && restart.Run()) logger::info("camera: the vanity camera's timer runs again");
+				}
+			}
+		}
+	}
+
 	void Tick()
 	{
 		const bool visible = renderer::IsMainWindowVisible();
+		Vanity(visible, g_wasVisible);
 		const bool want = settings::Get().pauseGameWhileOpen;
 		if (visible && !g_wasVisible && want) {
 			if (auto* world = World()) {
