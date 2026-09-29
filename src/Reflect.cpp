@@ -60,6 +60,9 @@ namespace reflect
 		}
 		const auto keyIndex = Offset(vm, "KeyIndex");
 		const auto icons = Offset(vm, "Icons");
+		if (keyIndex < 0) {
+			return false;   // the class exists before its property chain is linked (the first frames of a launch): ask again, never latch
+		}
 		g_state.store(keyIndex == 0xD0 ? 1 : -1);
 		if (g_state.load() > 0) {
 			logger::info("reflect: property offsets proven (VQuickKeysMenuViewModel KeyIndex at 0x{:X}, Icons at 0x{:X})", keyIndex, icons);
