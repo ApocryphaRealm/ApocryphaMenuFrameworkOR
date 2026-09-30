@@ -10,6 +10,9 @@ Newest first. Versions are issued by the version gate; a number here is one a bu
   Skyrim framework's 1.9.9 fix, for Oblivion Remastered's pad: XInput reports L2 and R2 as analog values, not buttons, so
   each now becomes a press past XInput's own threshold and arrives as ImGui's GamepadL2 / GamepadR2 - a mod's page can
   use them. While a mod's Rebind button is waiting, the triggers stay with that capture as before.
+- **AMF_IsMenuOpen** (AMF::IsMenuOpen in sdk/include/AMF.h): true while the framework's window is up. A mod that
+  reads the controller itself - Improved Wheel Menu reads the D-pad before the pad gate empties the game's reads - stands
+  down on it, so the D-pad no longer opens its wheel while the menu is open.
 
 ### Checked against the Skyrim framework
 - The rest of the Skyrim framework's controller navigation was already in this port (it was taken from Skyrim 1.9.8):

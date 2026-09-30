@@ -194,6 +194,14 @@ namespace AMF
 		if (fn) { fn(); }
 	}
 
+	// True while the framework's window is up (1.0.5). A mod that reads the controller itself, before the framework's
+	// pad gate empties the game's reads, stands down on it. False when the framework is missing or older.
+	inline bool IsMenuOpen()
+	{
+		AMF_H_FN("AMF_IsMenuOpen", bool (*)());
+		return fn ? fn() : false;
+	}
+
 	// ---- language ---------------------------------------------------------------------------------------------
 
 	// The language the menu is showing: "english", "french", "german", "italian", "spanish", "polish",

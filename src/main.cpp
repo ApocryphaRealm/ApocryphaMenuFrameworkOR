@@ -105,6 +105,13 @@ AMF_API void AMF_CloseMenu()
 	renderer::SetMenuVisible(false, false);
 }
 
+// 1.0.5: whether the framework's window is up - a mod that reads the controller itself (before the pad gate empties
+// the game's reads) stands down on it while the menu is open.
+AMF_API bool AMF_IsMenuOpen()
+{
+	return renderer::IsMainWindowVisible();
+}
+
 AMF_API bool AMF_DrawThemeFrame(void* a_drawList, float a_x0, float a_y0, float a_x1, float a_y1)
 {
 	return renderer::DrawThemeFrameAround(static_cast<ImDrawList*>(a_drawList), a_x0, a_y0, a_x1, a_y1);
