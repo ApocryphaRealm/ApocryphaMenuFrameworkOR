@@ -14,6 +14,11 @@ Newest first. Versions are issued by the version gate; a number here is one a bu
   reads the controller itself - Improved Wheel Menu reads the D-pad before the pad gate empties the game's reads - stands
   down on it, so the D-pad no longer opens its wheel while the menu is open.
 
+### Fixed
+- Every engine call that takes a world context (the System row's widget Create, the pause calls) runs fault-guarded
+  and refuses a context that is being destroyed. Minimap Menu crashed on quitting to the menu when its world context
+  outlived its world (2026-09-30); gate rule or-world-context-calls-are-guarded now refuses the pattern in every package.
+
 ### Checked against the Skyrim framework
 - The rest of the Skyrim framework's controller navigation was already in this port (it was taken from Skyrim 1.9.8):
   L1 / R1 walk the tabs - a mod's own tab bar when its page declares one (AMF::DeclareInnerTabs), otherwise the

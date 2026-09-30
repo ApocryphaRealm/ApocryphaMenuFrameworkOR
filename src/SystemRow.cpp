@@ -428,9 +428,13 @@ namespace systemrow
 				logger::warn("system row: WidgetBlueprintLibrary::Create is not reflected - no row");
 				return false;
 			}
+			if (ue::Dying(a_page)) return false;
 			create.Set("WorldContextObject", a_page);
 			create.Set("WidgetType", g_rowClass);
-			create.Run();
+			if (!create.RunGuarded()) {
+				logger::warn("system row: WidgetBlueprintLibrary::Create faulted - no row");
+				return false;
+			}
 			auto* row = create.Get<UE::UObject*>("ReturnValue");
 			if (!row) {
 				logger::warn("system row: Create returned no widget - no row");

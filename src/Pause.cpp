@@ -41,19 +41,19 @@ namespace pause
 		bool IsPaused(UE::UObject* a_world)
 		{
 			ue::Call c(Statics(), L"IsGamePaused");
-			if (!c || !a_world) return false;
+			if (!c || ue::Dying(a_world)) return false;
 			c.Set("WorldContextObject", a_world);
-			c.Run();
+			if (!c.RunGuarded()) return false;
 			return c.Get<bool>("ReturnValue");
 		}
 
 		bool SetPaused(UE::UObject* a_world, bool a_paused)
 		{
 			ue::Call c(Statics(), L"SetGamePaused");
-			if (!c || !a_world) return false;
+			if (!c || ue::Dying(a_world)) return false;
 			c.Set("WorldContextObject", a_world);
 			c.Set("bPaused", a_paused);
-			c.Run();
+			if (!c.RunGuarded()) return false;
 			return c.Get<bool>("ReturnValue");
 		}
 	}
