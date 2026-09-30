@@ -21,7 +21,7 @@
 //     static void DrawMyPage()
 //     {
 //         if (!AMF::UseFrameworkImGui()) return;      // draw with the framework's ImGui, every time
-//         ImGui::SliderFloat("Speed", &g_speed, 0.5f, 3.0f);
+//         precise::SliderFloat("Speed", &g_speed, 0.5f, 3.0f, "%.2f");   // PreciseSlider.h: one unit per D-pad nudge
 //         ImGui::Checkbox("Enabled", &g_enabled);
 //     }
 //

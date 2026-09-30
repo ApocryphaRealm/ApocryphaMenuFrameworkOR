@@ -7,6 +7,7 @@
 #include "Curtain.h"
 #include "Input.h"
 #include "Persistence.h"
+#include "PreciseSlider.h"
 #include "KnotworkBorder.h"
 #include "Skin.h"
 #include "Bindings.h"
@@ -845,7 +846,7 @@ namespace renderer
 			ImGui::Spacing();
 
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
-			if (ImGui::SliderFloat(TR("AMF_TextSize", "Text size"), &values.textScale, 1.0f, 2.0f, "%.2f"))
+			if (precise::SliderFloat(TR("AMF_TextSize", "Text size"), &values.textScale, 1.0f, 2.0f, "%.2f"))
 			{
 				// applied live via FontGlobalScale each frame
 			}

@@ -7,6 +7,7 @@
 #include <imgui.h>   // Dear ImGui 1.90.8 docking - the framework's version (see AMF.h, DRAWING)
 
 #include "AMF.h"
+#include "PreciseSlider.h"   // one unit per D-pad nudge (sdk/include)
 
 namespace
 {
@@ -24,7 +25,7 @@ namespace
 		ImGui::TextWrapped("A page from another mod, drawn with the ordinary C++ Dear ImGui API through AMF.h.");
 		ImGui::Separator();
 		ImGui::Checkbox("Enabled", &g_enabled);
-		ImGui::SliderFloat("Speed", &g_speed, 0.5f, 3.0f, "%.2f");
+		precise::SliderFloat("Speed", &g_speed, 0.5f, 3.0f, "%.2f");   // a D-pad nudge moves 0.01, not 1% of the range
 		const char* modes[] = { "Gentle", "Normal", "Brutal" };
 		ImGui::Combo("Mode", &g_mode, modes, IM_ARRAYSIZE(modes));
 		ImGui::InputText("Name", g_name, sizeof(g_name));
