@@ -620,7 +620,7 @@ namespace renderer
 			// curtain (keyed to Skyrim's MainMenu), pausing (PLAN.md M3) and the journal's System row (M3 puts AMF on
 			// the pause menu instead). A toggle that does nothing is worse than no toggle, so they are not drawn; the
 			// INI keys still read and save, so nothing is lost when each is wired.
-			constexpr bool kCurtainRow = false, kPauseRow = true, kSystemRow = true;   // the System row and the pause: 1.0.4
+			constexpr bool kCurtainRow = false, kPauseRow = false, kSystemRow = true;   // the System row: 1.0.4; the pause row is hidden (SetGamePaused did not stop the world - the owner, 2026-09-29: finalize without it)
 			if (kCurtainRow) {
 			if (widgets::Toggle(TR("AMF_BlackCurtain", "Black screen until the main menu is ready"), &values.startupCurtain))
 			{

@@ -1,6 +1,6 @@
 ApocryphaRealm Menu Framework - Oblivion Remastered
 ===================================================
-Version 1.0.1
+Version 1.0.4
 
 An original, GPL-3.0-or-later in-game menu framework (embedding Dear ImGui) for The Elder
 Scrolls IV: Oblivion Remastered, loaded by OBSE64. It is the same framework as Apocrypha Menu
@@ -23,6 +23,14 @@ WHAT YOU GET
   * Rebind buttons on other mods' pages: press Rebind, then the key, mouse button, mouse wheel,
     controller button, trigger or stick direction you want. That press only sets the binding -
     the menu and the game ignore it, so B and A can be bound too. Esc cancels on the keyboard.
+  * A row in the game's own System page - "Apocrypha Menu Framework", under Save, Load and
+    Quit - reached with the D-pad like the game's rows and opening this menu. It is added to the
+    page as it opens, not by replacing a game file, so it works with any menu artwork; the
+    "Mod settings in the game's System menu" switch turns it off (takes effect at the next launch).
+    Opened from that row, the window sits on the right so the page's rows stay in view; drag it
+    and the position is remembered for that way in.
+  * The idle vanity camera never takes over while the menu is open: its timer is held while
+    the window is up and runs again when it closes ([Menu] bKeepCameraAwake, on).
 
 USING IT WITH A CONTROLLER
 --------------------------
@@ -32,7 +40,7 @@ USING IT WITH A CONTROLLER
 
 NOT YET IN THIS VERSION
 -----------------------
-  * Opening the menu from the game's own pause menu, and pausing the game while it is open.
+  * Pausing the game while the menu is open (the setting is read but does nothing yet).
   * A controller button that opens the menu (F1 only for now).
   * The game's HUD opacity setting is not read; the menu is drawn fully opaque.
 

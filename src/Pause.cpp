@@ -120,7 +120,11 @@ namespace pause
 	{
 		const bool visible = renderer::IsMainWindowVisible();
 		Vanity(visible, g_wasVisible);
-		const bool want = settings::Get().pauseGameWhileOpen;
+		// 1.0.4 ships without the pause: GameplayStatics::SetGamePaused took the call and the world kept running (the owner,
+		// 2026-09-29: "finalize AMF in its current form without the time stop feature for now because it doesn't currently
+		// work"). The setting is read and kept; it does nothing until the pause is wired for real.
+		constexpr bool kPauseWired = false;
+		const bool want = kPauseWired && settings::Get().pauseGameWhileOpen;
 		if (visible && !g_wasVisible && want) {
 			if (auto* world = World()) {
 				if (IsPaused(world)) {
