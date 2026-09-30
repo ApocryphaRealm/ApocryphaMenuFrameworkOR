@@ -2,6 +2,22 @@
 
 Newest first. Versions are issued by the version gate; a number here is one a build earned by working in game.
 
+## 1.0.5 - 2026-09-30 - untested
+
+### Added
+- **The controller triggers reach the menus** (the owner, 2026-09-30: *"mirror the more up-to-date AMF for Skyrim with
+  better controller navigation ... and any other convenient controller navigation that's in the Skyrim AMF"*). The
+  Skyrim framework's 1.9.9 fix, for Oblivion Remastered's pad: XInput reports L2 and R2 as analog values, not buttons, so
+  each now becomes a press past XInput's own threshold and arrives as ImGui's GamepadL2 / GamepadR2 - a mod's page can
+  use them. While a mod's Rebind button is waiting, the triggers stay with that capture as before.
+
+### Checked against the Skyrim framework
+- The rest of the Skyrim framework's controller navigation was already in this port (it was taken from Skyrim 1.9.8):
+  L1 / R1 walk the tabs - a mod's own tab bar when its page declares one (AMF::DeclareInnerTabs), otherwise the
+  framework's page bar - Y opens a mod's options, L3 favourites the highlighted mod, the D-pad never steps a tab, the
+  on-screen keyboard, the thumbstick API. The bumpers reach a mod's inner tabs only when that mod declares them:
+  HUD Position Manager does from its next build.
+
 ## 1.0.4 - 2026-09-29 - untested (the System row proven in game 12:5x; this build with the pause row hidden not yet run)
 
 ### Added

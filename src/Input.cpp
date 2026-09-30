@@ -264,6 +264,10 @@ namespace input
 			// action on one - which is what "press R3 on the list item" needs (1.9.5).
 			case 0x0040: return ImGuiKey_GamepadL3;
 			case 0x0080: return ImGuiKey_GamepadR3;
+			// the triggers (1.0.5, the Skyrim framework's 1.9.9): XInput's analog triggers as button edges, codes above the
+			// sixteen button bits (see the pad poll)
+			case 0x10000: return ImGuiKey_GamepadL2;
+			case 0x20000: return ImGuiKey_GamepadR2;
 			default:     return ImGuiKey_None;
 			}
 		}
@@ -410,6 +414,7 @@ namespace input
 		using XInputGetState_t = DWORD(WINAPI*)(DWORD, XINPUT_STATE*);
 		XInputGetState_t g_xinput = nullptr;
 		WORD g_padButtons = 0;
+		bool g_padTriggers[2] = { false, false };   // the triggers' button state for the menus (1.0.5)
 		float g_padSent[4] = { 0.0f, 0.0f, 0.0f, 0.0f };   // lx ly rx ry last queued
 
 		// Driver presses, walked by PollGamepad on the render thread through DecideButton - the path a
@@ -790,6 +795,10 @@ namespace input
 				}
 				g_padButtons = 0;
 			}
+			for (int k = 0; k < 2; ++k)   // a trigger held as the menu closed is released too
+			{
+				if (g_padTriggers[k]) { DecideButton(Dev::kGamepad, k == 0 ? 0x10000u : 0x20000u, false); g_padTriggers[k] = false; }
+			}
 			for (float& s : g_padSent) { s = 0.0f; }
 			return;
 		}
@@ -832,6 +841,18 @@ namespace input
 			if (changed & bit) { DecideButton(Dev::kGamepad, bit, (buttons & bit) != 0); }
 		}
 		g_padButtons = buttons;
+
+		// the triggers as buttons for the menus (1.0.5): past XInput's threshold is down, back under it is up. Left to the
+		// capture path below while a consumer's bind button is waiting, which turns them into bindings itself.
+		if (!bindings::ConsumerCapturingGamepad())
+		{
+			const BYTE trig[2] = { rc == ERROR_SUCCESS ? st.Gamepad.bLeftTrigger : BYTE(0), rc == ERROR_SUCCESS ? st.Gamepad.bRightTrigger : BYTE(0) };
+			for (int k = 0; k < 2; ++k)
+			{
+				const bool down = trig[k] > XINPUT_GAMEPAD_TRIGGER_THRESHOLD;
+				if (down != g_padTriggers[k]) { DecideButton(Dev::kGamepad, k == 0 ? 0x10000u : 0x20000u, down); g_padTriggers[k] = down; }
+			}
+		}
 
 		// A consumer's controller capture also takes the triggers and the stick directions, which are not buttons.
 		// Each fires once when it passes the threshold and re-arms only after it has come back near rest.
