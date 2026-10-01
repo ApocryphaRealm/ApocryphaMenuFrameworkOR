@@ -15,6 +15,13 @@ Newest first. Versions are issued by the version gate; a number here is one a bu
   down on it, so the D-pad no longer opens its wheel while the menu is open.
 
 ### Fixed
+- **A crash when the game rebuilt its menus** (the owner, 2026-09-30: Oblivion crashed equipping the second loadout of
+  Simple Loadout System). The System row kept the System page, its own row and the row above it as raw pointers and
+  asked each tick whether they were still alive by reading the object's own slot index - from memory the garbage
+  collector had already freed (access violation in reflect::IsLive, called from systemrow::Tick). They are now kept as
+  handles (the object array's slot, class and name recorded while live; the slot is asked first and the object read
+  only while the array still holds it - HUD Position Manager's handle, logic library 8032), the pause code's camera
+  manager and controller likewise, and IsLive itself reads the slot index under a fault guard.
 - Every engine call that takes a world context (the System row's widget Create, the pause calls) runs fault-guarded
   and refuses a context that is being destroyed. Minimap Menu crashed on quitting to the menu when its world context
   outlived its world (2026-09-30); gate rule or-world-context-calls-are-guarded now refuses the pattern in every package.

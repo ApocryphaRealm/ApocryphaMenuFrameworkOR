@@ -251,12 +251,14 @@ namespace systemrow
 		// ---- state ---------------------------------------------------------------------------------------------
 		struct Injected
 		{
-			UE::UObject* page;
-			UE::UObject* row;
-			UE::UObject* last;   // the game's last row, the one above ours
+			// kept as handles, never raw pointers: the game garbage-collects the System page and its rows, and a freed
+			// pointer read to ask "is it alive" crashed the game (2026-09-30, equipping a loadout)
+			reflect::Handle page;
+			reflect::Handle row;
+			reflect::Handle last;   // the game's last row, the one above ours
 		};
-		std::vector<Injected>    g_injected;   // game thread
-		std::vector<UE::UObject*> g_refused;   // pages this code gave up on (no second try, no log spam)
+		std::vector<Injected>        g_injected;   // game thread
+		std::vector<reflect::Handle> g_refused;    // pages this code gave up on (no second try, no log spam)
 		UE::UClass*              g_rowClass = nullptr;
 		bool                     g_watching = false;
 		std::atomic<bool>        g_everInjected{ false };
@@ -268,7 +270,7 @@ namespace systemrow
 		bool IsOurRow(UE::UObject* a_o)
 		{
 			for (const auto& i : g_injected) {
-				if (i.row == a_o) return true;
+				if (i.row.Is(a_o)) return true;
 			}
 			return false;
 		}
@@ -303,9 +305,10 @@ namespace systemrow
 				renderer::SetMenuVisible(true, true);   // nested: placed to the right of the page's rows (Renderer.cpp, the nested default)
 			} else if (name.find("OnButtonFocussed") != std::string::npos || name == "OnFocus") {
 				for (const auto& i : g_injected) {
-					if (i.row == a_obj) {
-						if (const auto idx = IndexIn(Buttons(i.page), a_obj); idx >= 0) {
-							SetFocusIndex(i.page, idx);   // as the page does for its own rows in their focus handlers
+					auto* page = i.row.Is(a_obj) ? i.page.Get() : nullptr;
+					if (page) {
+						if (const auto idx = IndexIn(Buttons(page), a_obj); idx >= 0) {
+							SetFocusIndex(page, idx);   // as the page does for its own rows in their focus handlers
 						}
 					}
 				}
@@ -507,7 +510,7 @@ namespace systemrow
 				logger::info("system row: the page's Buttons array {} the row ({} entries)", inArray ? "holds" : "does NOT hold", arr ? arr->num : -1);
 			}
 			WireSlateNav(last, row);
-			g_injected.push_back({ a_page, row, last });
+			g_injected.push_back({ reflect::Handle(a_page), reflect::Handle(row), reflect::Handle(last) });
 			g_everInjected.store(true);
 			g_foundPath = ue::PathOf(a_page);
 			logger::info("system row: \"{}\" added to the System page {} as row {} of {}", pe::Utf8(UE::FString(kRowText)), ue::NameOf(a_page), rows.size() + 1, rows.size() + 1);
@@ -518,8 +521,10 @@ namespace systemrow
 		{
 			std::string s = "[";
 			for (std::size_t i = 0; i < g_injected.size(); ++i) {
-				s += std::format("{}{{\"page\":\"{}\",\"row\":\"{}\",\"live\":{}}}", i ? "," : "", ue::NameOf(g_injected[i].page), ue::NameOf(g_injected[i].row),
-					reflect::IsLive(g_injected[i].page) ? "true" : "false");
+				auto* page = g_injected[i].page.Get();
+				auto* row = g_injected[i].row.Get();
+				s += std::format("{}{{\"page\":\"{}\",\"row\":\"{}\",\"live\":{}}}", i ? "," : "", page ? ue::NameOf(page) : std::string("gone"),
+					row ? ue::NameOf(row) : std::string("gone"), page ? "true" : "false");
 			}
 			s += "]";
 			std::scoped_lock l(g_reportLock);
@@ -548,24 +553,30 @@ namespace systemrow
 		static bool pageWatched = false;
 		if (!pageWatched) pageWatched = pe::Watch(pageClass, &OnPageEvent);
 		// forget pages that are gone
-		std::erase_if(g_injected, [](const Injected& i) { return !reflect::IsLive(i.page); });
-		std::erase_if(g_refused, [](UE::UObject* p) { return !reflect::IsLive(p); });
+		const auto before = g_injected.size();
+		std::erase_if(g_injected, [](const Injected& i) { return !i.page.Get(); });
+		if (g_injected.size() != before) logger::debug("system row: {} System page(s) garbage-collected - forgotten", before - g_injected.size());
+		std::erase_if(g_refused, [](const reflect::Handle& p) { return !p.Get(); });
 		for (const auto& i : g_injected) {
-			if (!reflect::IsLive(i.row)) continue;
-			if (IndexIn(Buttons(i.page), i.row) < 0) {
-				if (AppendButton(i.page, i.row)) logger::info("system row: the page rebuilt its Buttons array - the row put back into it");
+			auto* page = i.page.Get();
+			auto* row = i.row.Get();
+			if (!page || !row) continue;
+			if (IndexIn(Buttons(page), row) < 0) {
+				if (AppendButton(page, row)) logger::info("system row: the page rebuilt its Buttons array - the row put back into it");
 			}
-			if (g_frame % 60 == 0 && reflect::IsLive(i.last)) {
-				WireSlateNav(i.last, i.row);   // the page may set its rows' rules again on each activation: ours are set again too
+			if (g_frame % 60 == 0) {
+				if (auto* last = i.last.Get()) {
+					WireSlateNav(last, row);   // the page may set its rows' rules again on each activation: ours are set again too
+				}
 			}
 		}
 		for (auto* page : reflect::Instances(pageClass)) {
-			const bool done = std::ranges::any_of(g_injected, [&](const Injected& i) { return i.page == page; });
-			if (done || std::ranges::find(g_refused, page) != g_refused.end()) continue;
+			const bool done = std::ranges::any_of(g_injected, [&](const Injected& i) { return i.page.Is(page); });
+			if (done || std::ranges::any_of(g_refused, [&](const reflect::Handle& r) { return r.Is(page); })) continue;
 			if (!Inject(page)) {
 				// a page not laid out yet is tried again; one this code warned about is not
 				if (ue::ObjProp(ue::ObjProp(ue::ObjProp(page, "settings_system_quit_button"), "Slot"), "Parent")) {
-					g_refused.push_back(page);
+					g_refused.emplace_back(page);
 				}
 			}
 		}

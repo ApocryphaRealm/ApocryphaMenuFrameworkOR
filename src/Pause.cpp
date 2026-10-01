@@ -61,17 +61,17 @@ namespace pause
 	namespace
 	{
 		// ---- the idle vanity camera, kept off while the window is open ([Menu] bKeepCameraAwake) ----
-		UE::UObject* g_cameraManager = nullptr;
-		UE::UObject* g_controller = nullptr;
+		reflect::Handle g_cameraManager;   // handles, not raw pointers: both are rebuilt on every level load
+		reflect::Handle g_controller;
 		ULONGLONG    g_vanityAt = 0;
 		bool         g_vanityHeld = false;   // the timer is stopped by this code (restarted on close)
 
-		UE::UObject* Live(UE::UObject*& a_cache, const wchar_t* a_class)
+		UE::UObject* Live(reflect::Handle& a_cache, const wchar_t* a_class)
 		{
-			if (a_cache && reflect::IsLive(a_cache)) return a_cache;
+			if (auto* o = a_cache.Get()) return o;
 			auto* cls = ue::Class(a_class);
-			a_cache = cls ? ue::FirstOf(cls) : nullptr;
-			return a_cache;
+			a_cache.Set(cls ? ue::FirstOf(cls) : nullptr);
+			return a_cache.Get();
 		}
 
 		bool VanityCameraUp(UE::UObject* a_cm)

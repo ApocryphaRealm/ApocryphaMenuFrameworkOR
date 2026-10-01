@@ -126,18 +126,76 @@ namespace reflect
 		return out;
 	}
 
+	namespace
+	{
+		// the object's own internalIndex, read under SEH: a freed object's memory may already be returned to Windows
+		bool ReadIndex(const UE::UObject* a_o, std::int32_t& a_out)
+		{
+			__try {
+				a_out = a_o->internalIndex;
+				return true;
+			} __except (EXCEPTION_EXECUTE_HANDLER) {
+				return false;
+			}
+		}
+
+		// the object the array's slot holds now (nullptr for an index outside the array)
+		UE::UObject* SlotObject(std::int32_t a_idx)
+		{
+			auto* arr = UE::FUObjectArray::GetSingleton();
+			if (!arr || a_idx < 0 || a_idx >= arr->GetObjectArrayNum()) {
+				return nullptr;
+			}
+			auto* item = arr->IndexToObject(a_idx);
+			return item ? reinterpret_cast<UE::UObject*>(item->object) : nullptr;
+		}
+
+		std::uint64_t NameBits(const UE::UObject* a_o)
+		{
+			const UE::FName n = a_o->GetFName();
+			std::uint64_t out = 0;
+			std::memcpy(&out, &n, sizeof(out));
+			return out;
+		}
+	}
+
 	bool IsLive(UE::UObject* a_o)
 	{
-		auto* arr = UE::FUObjectArray::GetSingleton();
-		if (!a_o || !arr) {
+		std::int32_t idx = -1;
+		if (!a_o || !ReadIndex(a_o, idx)) {
+			if (a_o) {
+				static bool warned = false;
+				if (!warned) {
+					warned = true;
+					logger::warn("reflect: IsLive was handed a pointer whose memory is gone - a raw pointer kept across frames (use reflect::Handle)");
+				}
+			}
 			return false;
 		}
-		const std::int32_t idx = a_o->internalIndex;
-		if (idx < 0 || idx >= arr->GetObjectArrayNum()) {
-			return false;
+		return SlotObject(idx) == a_o;
+	}
+
+	void Handle::Set(UE::UObject* a_live)
+	{
+		ptr = a_live;
+		index = -1;
+		cls = nullptr;
+		name = 0;
+		if (!a_live || !ReadIndex(a_live, index)) {
+			ptr = nullptr;
+			index = -1;
+			return;
 		}
-		auto* item = arr->IndexToObject(idx);
-		return item && reinterpret_cast<UE::UObject*>(item->object) == a_o;
+		cls = a_live->GetClass();
+		name = NameBits(a_live);
+	}
+
+	UE::UObject* Handle::Get() const
+	{
+		// the slot first: the kept pointer is read only once the array still holds it (so it is not freed)
+		if (!ptr || SlotObject(index) != ptr) return nullptr;
+		if (ptr->GetClass() != cls || NameBits(ptr) != name) return nullptr;   // the slot and address reused by another object
+		return ptr;
 	}
 
 	std::vector<UE::UObject*> Instances(UE::UClass* a_class)
