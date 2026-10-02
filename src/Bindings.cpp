@@ -73,6 +73,11 @@ namespace bindings
 			set(Action::kGrabMod,      KeyKind::kNone,       -1, PadKind::kButton,   0x0080);   // R3
 			set(Action::kGrabUp,       KeyKind::kNone,       -1, PadKind::kStickDir, 0x10);     // right stick up
 			set(Action::kGrabDown,     KeyKind::kNone,       -1, PadKind::kStickDir, 0x11);     // right stick down
+			// SCREENSHOT (1.0.6, the owner, 2026-10-02: "make it a rebindable option ... only works with AMF open because
+			// regular Steam screenshot works in the game itself"). F11, not F12: Steam's F12 would fire too and save a
+			// second picture without the menu. View on the pad: inside the menu only the on-screen keyboard's Done uses
+			// it, and that one may share (ExclusiveTogether).
+			set(Action::kScreenshot,   KeyKind::kKeyboard, 0x57, PadKind::kButton,   0x0020);   // F11 / View
 		}
 
 		// Two functions that can be live at the same moment must not share a binding. Everything
@@ -202,6 +207,7 @@ namespace bindings
 		case Action::kGrabMod:      return TR("AMF_ActGrabMod", "Pick up a mod to move it");
 		case Action::kGrabUp:       return TR("AMF_ActGrabUp", "Move the picked-up mod up");
 		case Action::kGrabDown:     return TR("AMF_ActGrabDown", "Move the picked-up mod down");
+		case Action::kScreenshot:   return TR("AMF_ActScreenshot", "Take a screenshot");
 		default:                    return "";
 		}
 	}
@@ -220,6 +226,7 @@ namespace bindings
 		case Action::kGrabMod:      return TR("AMF_ActGrabModHelp", "Picks up the highlighted mod in the list. Move it with the two controls below, one place at a time; press this again, or B, to put it down.");
 		case Action::kGrabUp:
 		case Action::kGrabDown:     return TR("AMF_ActGrabMoveHelp", "Moves a picked-up mod one place. Held on a stick, it keeps stepping.");
+		case Action::kScreenshot:   return TR("AMF_ActScreenshotHelp", "Saves a picture of the screen with this menu on it (Steam's screenshot leaves the menu out). Works while the menu is open; it goes to the game's Data\\AMF Screenshots - under Mod Organizer 2, the overwrite folder.");
 		default:                    return "";
 		}
 	}
@@ -242,7 +249,7 @@ namespace bindings
 		// must not be raised as well, or a press would both move the cursor and fire a command.
 		static constexpr Action kCommands[] = {
 			Action::kTabPrev, Action::kTabNext, Action::kContextMenu, Action::kFavourite,
-			Action::kGrabMod, Action::kGrabUp, Action::kGrabDown
+			Action::kGrabMod, Action::kGrabUp, Action::kGrabDown, Action::kScreenshot
 		};
 		std::scoped_lock lock(g_lock);
 		for (Action a : kCommands)
@@ -587,7 +594,7 @@ namespace bindings
 		const char* kKeys[] = {
 			"ToggleMenu", "Close", "Up", "Down", "Left", "Right", "Activate", "Back",
 			"PaneLeft", "PaneRight", "OskShift", "OskBackspace", "OskDone",
-			"TabPrev", "TabNext", "ContextMenu", "Favourite", "GrabMod", "GrabUp", "GrabDown"
+			"TabPrev", "TabNext", "ContextMenu", "Favourite", "GrabMod", "GrabUp", "GrabDown", "Screenshot"
 		};
 		static_assert(sizeof(kKeys) / sizeof(kKeys[0]) == static_cast<std::size_t>(Action::kCount));
 	}

@@ -55,6 +55,7 @@ namespace bindings
 		kGrabMod,          // pick the highlighted mod up / put it down (R3)
 		kGrabUp,           // move the picked-up mod up one place (right stick up)
 		kGrabDown,         // move the picked-up mod down one place (right stick down)
+		kScreenshot,       // save what the screen shows, this menu included (F11 / View; Screenshot.h)
 		kCount
 	};
 

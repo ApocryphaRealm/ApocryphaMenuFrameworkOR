@@ -14,7 +14,6 @@
 #include "Settings.h"
 #include "Strings.h"
 #include "Pause.h"
-#include "Screenshot.h"
 #include "SystemRow.h"
 #include "Tick.h"
 
@@ -223,7 +222,6 @@ namespace
 	{
 		systemrow::Tick();
 		pause::Tick();
-		screenshot::Tick();
 	}
 }
 

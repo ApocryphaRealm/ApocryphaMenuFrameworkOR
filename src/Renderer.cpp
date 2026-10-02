@@ -10,6 +10,7 @@
 #include "PreciseSlider.h"
 #include "KnotworkBorder.h"
 #include "MapEdgeBorder.h"
+#include "Screenshot.h"
 #include "Skin.h"
 #include "Bindings.h"
 #include "Personalization.h"
@@ -1720,6 +1721,9 @@ namespace renderer
 
 			if (ImGui::Begin(windowId, nullptr, windowFlags))
 			{
+				// The Screenshot control (1.0.6): raised only while this window is open, consumed here once per frame.
+				// Not while the on-screen keyboard is up: View is its Done button too, and one press must not do both.
+				if (bindings::TakeTriggered(bindings::Action::kScreenshot) && !keyboard::Capturing()) { screenshot::Take(); }
 				if (!nested)
 				{
 					// The shape a corner drag keeps is the shape the window had when the drag began:

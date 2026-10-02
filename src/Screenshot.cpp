@@ -12,7 +12,6 @@ namespace screenshot
 	namespace
 	{
 		std::atomic_bool g_busy{ false };
-		bool             g_wasDown = false;
 
 		HWND GameWindow()
 		{
@@ -27,7 +26,18 @@ namespace screenshot
 		{
 			const auto& folder = settings::Get().screenshotFolder;
 			if (!folder.empty()) { return std::filesystem::path(folder); }
-			PWSTR docs = nullptr;
+			// The game's Data folder: <game>\OblivionRemastered\Content\Dev\ObvData\Data, two up from the exe's
+			// Binaries\Win64. Mod Organizer 2 virtualises that folder, so a NEW file written there goes to MO2's
+			// overwrite; outside MO2 it simply stays in Data.
+			wchar_t exe[MAX_PATH]{};
+			if (::GetModuleFileNameW(nullptr, exe, MAX_PATH))
+			{
+				const auto data = std::filesystem::path(exe).parent_path().parent_path().parent_path() /
+								  "Content" / "Dev" / "ObvData" / "Data";
+				std::error_code ec;
+				if (std::filesystem::is_directory(data, ec)) { return data / "AMF Screenshots"; }
+			}
+			PWSTR docs = nullptr;   // not where the remaster keeps its Data: Documents, so the picture is still kept
 			std::filesystem::path out = "AMF Screenshots";
 			if (SUCCEEDED(::SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &docs)) && docs)
 			{
@@ -120,32 +130,16 @@ namespace screenshot
 			g_busy.store(false);
 		}
 
-		bool Held(int a_vk) { return (::GetAsyncKeyState(a_vk) & 0x8000) != 0; }
 	}
 
-	void Tick()
+	void Take()
 	{
-		const auto& s = settings::Get();
-		if (!s.screenshotEnabled || s.screenshotKey == 0) { return; }
-		static int s_vk = 0;
-		static std::uint32_t s_forScan = 0;
-		if (s_forScan != s.screenshotKey)
-		{
-			s_forScan = s.screenshotKey;
-			s_vk = static_cast<int>(::MapVirtualKeyW(s.screenshotKey, MAPVK_VSC_TO_VK_EX));
-			logger::info("screenshot: key scan code 0x{:X} (virtual key 0x{:X}){}{}{}", s.screenshotKey, s_vk,
-				s.screenshotCtrl ? " + Ctrl" : "", s.screenshotShift ? " + Shift" : "", s.screenshotAlt ? " + Alt" : "");
-		}
-		if (s_vk == 0) { return; }
-
-		const bool down = Held(s_vk);
-		const bool pressed = down && !g_wasDown;
-		g_wasDown = down;
-		if (!pressed) { return; }
-		if (Held(VK_CONTROL) != s.screenshotCtrl || Held(VK_SHIFT) != s.screenshotShift || Held(VK_MENU) != s.screenshotAlt) { return; }
-
 		HWND game = GameWindow();
-		if (!game) { return; }            // the key was for another window
+		if (!game)
+		{
+			logger::info("screenshot: not taken - the game is not the window in front");
+			return;
+		}
 		RECT area{};
 		POINT origin{ 0, 0 };
 		if (!::GetClientRect(game, &area) || !::ClientToScreen(game, &origin)) { return; }

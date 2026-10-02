@@ -24,14 +24,20 @@ Newest first. Versions are issued by the version gate; a number here is one a bu
     rid of the old Oblivion paper theme"*). A saved `cyrodiil` or `oblivion-paper` theme id now opens as `oblivion`.
 
 ### Added
-- **A screenshot key that catches this menu: Ctrl+F12** (the owner, 2026-10-02: *"I'd rather just have a hotkey that
-  takes the same screenshot that yours does ... It only needs to run during the game"*).
+- **A Screenshot control that catches this menu: F11 on the keyboard, View on the controller** (the owner, 2026-10-02:
+  *"I'd rather just have a hotkey that takes the same screenshot that yours does"*, then *"make it a rebindable option
+  ... it can be something that only works with AMF open because regular Steam screenshot works in the game itself"*).
   - Steam's F12 copies the frame before this framework draws, so it shows the game without the menu.
-  - This key copies what the screen shows, menu and all, and saves it as a PNG on a worker thread. A rising double
+  - This control copies what the screen shows, menu and all, and saves it as a PNG on a worker thread. A rising double
     beep says it was saved.
   - How and when the framework draws is unchanged.
-  - `[Screenshot]` in the INI: the key (any key, with Ctrl / Shift / Alt) and the folder. By default it saves to
-    `Documents\My Games\Oblivion Remastered\AMF Screenshots`.
+  - It is one of the framework's own controls, rebindable on Controls with press-to-bind, and it works while the menu
+    is open.
+  - F11 rather than F12, since Steam would also save a picture without the menu.
+  - View is shared only with the on-screen keyboard's Done; while that keyboard is up, the press goes to Done.
+  - The pictures go to the game's `Data\AMF Screenshots`, which Mod Organizer 2 puts in its overwrite folder (the owner:
+    *"have it kicked out through MO2 into the overwrite"*). `[Screenshot] sFolder` names another folder.
+  - Two new strings in all eleven languages.
 
 ### Added - the Skyrim framework's 2.0 (the owner: *"update the Oblivion AMF to the most up-to-date version in line with
 AMF for Skyrim. So it has the separators and all that"*)
