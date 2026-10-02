@@ -76,6 +76,7 @@ namespace input
 	// measured 2026-09-05 on a checkbox that the cursor was visibly sitting on.
 	void QueueMouseClick(std::uint32_t a_button);
 	void QueueKey(std::uint32_t a_scancode);        // DirectInput scan code, down then up
+	void QueueStick(int a_which, float a_x, float a_y, int a_holdFrames);   // a thumbstick record held, then centred (driver)
 	void InjectPress(std::uint32_t a_device, std::uint32_t a_code, int a_holdFrames);   // REAL engine event, ahead of the hook (0 kb, 1 mouse, 2 pad)
 	void InjectText(const std::string& a_utf8);                                        // REAL CharEvents, ahead of the hook
 	void QueueText(const std::string& a_utf8);      // one character record per byte (ASCII)

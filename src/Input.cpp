@@ -1282,6 +1282,17 @@ namespace input
 		g_deferred.push_back({ 3, { Record::Kind::kKeyboard, a_scancode, false, 0.0f, 0.0f } });
 	}
 
+	// Driver-side thumbstick: the same record the game's thumbstick event becomes, held for a_holdFrames and then
+	// centred, so a headless test moves a stick the way a hand does (AMF grab-and-move, 2026-10-02).
+	void QueueStick(int a_which, float a_x, float a_y, int a_holdFrames)
+	{
+		const std::uint32_t which = a_which == 1 ? 1u : 0u;
+		const int hold = a_holdFrames < 1 ? 1 : (a_holdFrames > 600 ? 600 : a_holdFrames);
+		std::scoped_lock lock(g_queueLock);
+		g_deferred.push_back({ 1, { Record::Kind::kThumbstick, which, true, a_x, a_y } });
+		g_deferred.push_back({ 1 + hold, { Record::Kind::kThumbstick, which, false, 0.0f, 0.0f } });
+	}
+
 	void QueueText(const std::string& a_utf8)
 	{
 		std::scoped_lock lock(g_queueLock);

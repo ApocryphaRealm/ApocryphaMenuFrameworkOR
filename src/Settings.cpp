@@ -310,7 +310,7 @@ namespace settings
 				"sPlates=" << g_values.skinPlates << "\n"
 				"\n"
 				"[Log]\n"
-				"; 0 = trace (most comprehensive, the project default) ... 6 = off.\n"
+				"; 0 = trace, 1 = debug, 2 = info (the shipped default), 3 = warn, 4 = error, 5 = critical, 6 = off. Raise to 0 for a bug report.\n"
 				"uLogLevel=" << g_values.logLevel << "\n";
 
 		// Menu-shell personalization writes its own two sections (aliases, custom order).

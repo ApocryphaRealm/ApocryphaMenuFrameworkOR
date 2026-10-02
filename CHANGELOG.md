@@ -2,6 +2,47 @@
 
 Newest first. Versions are issued by the version gate; a number here is one a build earned by working in game.
 
+## 1.0.6 - 2026-10-02 - untested
+
+### Changed
+- **No title bar; the frame runs round all four sides** (the owner, 2026-10-02: *"do the same thing that AMF for Skyrim
+  did by removing the top bar and extending, or rather connecting, the frame on all four sides"*). The collapse arrow is
+  gone and the window no longer moves: without a title bar ImGui would let any empty part of the window drag it. Each
+  way in keeps its own place. The key-opened window opens where it was last left; the System-row window opens on the
+  right of the screen so the System page's rows stay in view. Both still resize from their edges.
+- **Cyrodiil Map, this framework's own look, is the new default theme** (the owner: *"give it a frame art similar to how
+  Skyrim has a frame art, except this frame will be more like an embroidered map's edge. Something a bit decorative in
+  a gold or brown color"*).
+  - The frame: an embroidered map's edge - a gold couched cord, a compass star in a stitched ring at each corner, and a
+    brown running stitch.
+  - The colours: parchment with brown ink.
+  - The art is original, drawn from shapes by `tools/make_mapedge_frame.py`, so no game file ships.
+  - The edges tile rather than stretch, so the stitches keep their size.
+  - The frame scales with the UI: 26 px at 1080p, 43 px at 1800 px tall.
+  - Skyrim's knotwork stays as the "Skyrim" theme, and every other theme is unchanged.
+
+### Added - the Skyrim framework's 2.0 (the owner: *"update the Oblivion AMF to the most up-to-date version in line with
+AMF for Skyrim. So it has the separators and all that"*)
+- **Separators in the mod list**, like MO2's.
+  - Y (or a right-click) on a mod gives *New separator above* and *Send to* (a separator, or No separator).
+  - A separator folds and unfolds with A or a click, and shows a count when folded.
+  - Separators can be renamed, deleted and favourited.
+  - A-Z sorts the loose mods only.
+- **Move to the top** goes to the top of the mod's own separator.
+- **Reorder** in a mod's options opens a small up / down box. Each press moves the mod one place, and the box stays open.
+- **Grab and move**: R3 picks up the highlighted mod and the right stick steps it up or down; R3 again, or B, puts it
+  down. All three controls are rebindable on Controls. R3 is the target lock only in gameplay; the game takes no input
+  while this menu is open (the owner: *"Obviously, you're not going to target lock while in the menu"*).
+- **The side pane fits its names**, and the window widens once when the names and the page do not both fit. The
+  System-row window widens leftwards, since it sits against the right edge.
+- 18 new strings in all eleven languages, taken from the Skyrim framework's translations.
+- amf.menu ops `separator` and `stick` for headless tests. The DevBench argument reader now matches keys only: a value
+  equal to a key name had been read as that key.
+
+### Not taken from Skyrim 2.0
+- **One centred window for both ways in.** Oblivion keeps its System-row placement on the right.
+- **The start-up curtain's splash shapes (2.0.2).** Oblivion's curtain is plain black, with no modlist splash to fit.
+
 ## 1.0.5 - 2026-09-30 - untested
 
 ### Added

@@ -32,6 +32,7 @@
 
 #include <imgui.h>
 #include <imgui_internal.h>
+#include "PreciseSlider.h"
 #include <vector>
 // Oblivion Remastered is D3D12-only: the overlay (Overlay.cpp) owns the device, and gfx:: lends out what the
 // renderer needs (textures, the ImGui DX12 backend). The Win32 platform backend is the same as Skyrim's.
@@ -965,6 +966,148 @@ namespace renderer
 							   "value should still be here. A DIFFERENT save should show <unset>.");
 		}
 
+		// ---- Separators in the side list (the owner, 2026-10-02 - MO2's separators) --------------------------------------
+		// Creating one names it at once: the rename modal opens on it with the default name filled in.
+		void BeginNewSeparator(const std::vector<registry::Entry>& a_entries, const std::string& a_beforeName)
+		{
+			const char* name = TR("AMF_SeparatorDefaultName", "New separator");
+			g_renameTarget = personalization::AddSeparator(a_entries, a_beforeName, name);
+			std::snprintf(g_renameBuffer, sizeof(g_renameBuffer), "%s", name);
+			g_renameOpenPending = true;
+			settings::Save();
+		}
+
+		// A separator row: a fold arrow, the name, how many menus it holds when folded, a white box when pinned. A (or a
+		// click) folds and unfolds it; Y (or a right-click) opens its menu - the same binding a mod row uses.
+		// GRAB AND MOVE (the owner, 2026-10-02). The mod picked up with the grab action, empty when none is.
+		std::string g_grabbedMod;
+
+		// The move actions bound to a stick direction are polled rather than raised: one step as the stick is pushed,
+		// then a step every 0.12 s while it is held past a 0.35 s pause. A move bound to a button or key is raised
+		// like any command instead and steps once per press. Called every frame so a held stick is not mistaken for
+		// a fresh push the moment a mod is picked up.
+		int GrabStickStep()
+		{
+			static int s_lastDir = 0;
+			static double s_nextAt = 0.0;
+			const auto held = [](bindings::Action a_action) {
+				const bindings::Binding b = bindings::Get(a_action);
+				if (b.padKind != bindings::PadKind::kStickDir) { return false; }
+				float x = 0.0f, y = 0.0f;
+				bool clicked = false, live = false;
+				input::GetStick((b.padCode >> 4) & 0xF, x, y, clicked, live);
+				constexpr float kPush = 0.5f;   // y > 0 is up, as for the left stick's navigation
+				switch (b.padCode & 0xF)
+				{
+				case 0: return y > kPush;
+				case 1: return y < -kPush;
+				case 2: return x < -kPush;
+				case 3: return x > kPush;
+				default: return false;
+				}
+			};
+			const int dir = held(bindings::Action::kGrabUp) ? -1 : (held(bindings::Action::kGrabDown) ? 1 : 0);
+			const double now = ImGui::GetTime();
+			int step = 0;
+			if (dir != 0 && dir != s_lastDir) { step = dir; s_nextAt = now + 0.35; }
+			else if (dir != 0 && now >= s_nextAt) { step = dir; s_nextAt = now + 0.12; }
+			s_lastDir = dir;
+			return step;
+		}
+
+		void DrawSeparatorRow(const std::vector<registry::Entry>& a_entries, const personalization::DisplayEntry& a_row,
+							  bool a_contextMenu, bool a_favouriteKey)
+		{
+			ImGui::PushID(a_row.modName.c_str());
+			const bool favourite = personalization::IsFavourite(a_row.modName);
+			const float boxSide = ImGui::GetFontSize() * 0.55f;
+			const float gutter = boxSide + ImGui::GetStyle().ItemInnerSpacing.x * 2.0f;
+			const ImVec2 rowTopLeft = ImGui::GetCursorScreenPos();
+
+			// the name (and, folded, how many menus it holds) is the row's one label - one nav stop; the fold arrow is drawn
+			// in front of it, ImGui's own tree arrow (down when open, right when folded)
+			char label[160];
+			if (a_row.collapsed) { std::snprintf(label, sizeof(label), "%s  (%d)", a_row.displayName.c_str(), a_row.children); }
+			else { std::snprintf(label, sizeof(label), "%s", a_row.displayName.c_str()); }
+			const float arrowRoom = ImGui::GetFontSize() * 1.1f;
+			const ImVec2 arrowAt(rowTopLeft.x + gutter, rowTopLeft.y);
+			ImGui::Indent(gutter + arrowRoom);
+			ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+			const bool picked = ImGui::Selectable(label, false);
+			ImGui::PopStyleColor();
+			ImGui::Unindent(gutter + arrowRoom);
+			ImGui::RenderArrow(ImGui::GetWindowDrawList(), arrowAt, ImGui::GetColorU32(ImGuiCol_Text),
+							   a_row.collapsed ? ImGuiDir_Right : ImGuiDir_Down, 0.8f);
+			// a hairline under the separator, from the end of its name to the pane's edge
+			{
+				const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+				const float y = (mn.y + mx.y) * 0.5f;
+				const float x0 = mn.x + ImGui::CalcTextSize(label).x + ImGui::GetStyle().ItemSpacing.x;
+				if (x0 < mx.x) { ImGui::GetWindowDrawList()->AddLine(ImVec2(x0, y), ImVec2(mx.x, y), ImGui::GetColorU32(ImGuiCol_Separator), 1.0f); }
+			}
+			if (favourite)
+			{
+				const float top = rowTopLeft.y + (ImGui::GetTextLineHeight() - boxSide) * 0.5f;
+				const float left = rowTopLeft.x + ImGui::GetStyle().ItemInnerSpacing.x * 0.5f;
+				ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(left, top), ImVec2(left + boxSide, top + boxSide), IM_COL32(255, 255, 255, 255));
+			}
+			if (picked)
+			{
+				personalization::ToggleCollapsed(a_row.modName);
+				settings::Save();
+			}
+			if (ImGui::IsItemFocused())
+			{
+				if (a_contextMenu) { ImGui::OpenPopup("##sepctx"); }
+				if (a_favouriteKey)
+				{
+					personalization::ToggleFavourite(a_row.modName);
+					settings::Save();
+				}
+			}
+			const float ctxPad = ImGui::GetFontSize() * 0.35f;
+			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(ctxPad, ctxPad));
+			const bool ctxOpen = ImGui::BeginPopupContextItem("##sepctx");
+			ImGui::PopStyleVar();
+			if (ctxOpen)
+			{
+				if (ImGui::MenuItem(a_row.collapsed ? TR("AMF_SeparatorExpand", "Expand") : TR("AMF_SeparatorCollapse", "Collapse")))
+				{
+					personalization::ToggleCollapsed(a_row.modName);
+					settings::Save();
+				}
+				if (ImGui::MenuItem(favourite ? TR("AMF_Unfavourite", "Remove from favourites") : TR("AMF_Favourite", "Add to favourites")))
+				{
+					personalization::ToggleFavourite(a_row.modName);
+					settings::Save();
+				}
+				if (ImGui::MenuItem(TR("AMF_Rename", "Rename...")))
+				{
+					g_renameTarget = a_row.modName;
+					std::snprintf(g_renameBuffer, sizeof(g_renameBuffer), "%s", a_row.displayName.c_str());
+					g_renameOpenPending = true;
+				}
+				ImGui::Separator();
+				if (ImGui::MenuItem(TR("AMF_NewSeparatorAbove", "New separator above")))
+				{
+					BeginNewSeparator(a_entries, a_row.modName);
+				}
+				if (ImGui::MenuItem(TR("AMF_MoveToTop", "Move to the top")))
+				{
+					personalization::MoveTo(a_entries, a_row.modName, 1);
+					settings::Save();
+				}
+				ImGui::Separator();
+				if (ImGui::MenuItem(TR("AMF_SeparatorDelete", "Delete separator")))
+				{
+					personalization::RemoveSeparator(a_row.modName);   // its menus join the separator above
+					settings::Save();
+				}
+				ImGui::EndPopup();
+			}
+			ImGui::PopID();
+		}
+
 		// ---- Menu list: rename and reorder (author verdict 2026-09-01) ----------------------
 		// Presentation only - the registry and the mods themselves are untouched. Numbering is
 		// insert-and-shift: type a position and every other entry re-flows around it, so nobody
@@ -1052,7 +1195,13 @@ namespace renderer
 					}
 
 					ImGui::TableSetColumnIndex(1);
-					ImGui::TextUnformatted(row.modName.c_str());
+					if (row.separator) { ImGui::TextDisabled("%s", TR("AMF_SeparatorRow", "(separator)")); }
+					else
+					{
+						if (row.depth > 0) { ImGui::Indent(ImGui::GetFontSize() * 0.9f); }
+						ImGui::TextUnformatted(row.modName.c_str());
+						if (row.depth > 0) { ImGui::Unindent(ImGui::GetFontSize() * 0.9f); }
+					}
 
 					ImGui::TableSetColumnIndex(2);
 					auto buffer = aliasBuffers.find(row.modName);
@@ -1065,10 +1214,10 @@ namespace renderer
 					}
 					ImGui::SetNextItemWidth(-FLT_MIN);
 					const bool committed =
-						ImGui::InputTextWithHint("##alias", row.modName.c_str(), buffer->second.data(),
+						ImGui::InputTextWithHint("##alias", row.separator ? row.displayName.c_str() : row.modName.c_str(), buffer->second.data(),
 												 buffer->second.size(), ImGuiInputTextFlags_EnterReturnsTrue);
 						keyboard::NoteTextField(ImGui::GetItemID());
-					if (committed || ImGui::IsItemDeactivatedAfterEdit())
+					if ((committed || ImGui::IsItemDeactivatedAfterEdit()) && !(row.separator && buffer->second[0] == '\0'))
 					{
 						personalization::SetAlias(row.modName, buffer->second.data());
 						settings::Save();
@@ -1408,6 +1557,9 @@ namespace renderer
 			const bool nested = g_nested.load(std::memory_order_acquire);
 			const char* windowId = nested ? "ApocryphaRealm Menu Framework###amf-nested"
 										  : "ApocryphaRealm Menu Framework###amf-main";
+			// OBLIVION KEEPS TWO PLACEMENTS (2026-10-02). The Skyrim framework's 2.0 made both ways in one centred window; here
+			// the System-row window stays on the right of the screen (the owner, 2026-09-29: "so that it doesn't block out the
+			// view of the system rows to its left") and the key-opened one where it was left. Each remembers its own geometry.
 			settings::WindowGeometry& profile =
 				nested ? settings::Get().nestedWindow : settings::Get().hotkeyWindow;
 
@@ -1631,7 +1783,51 @@ namespace renderer
 				// has asked for a frame, and it replaces the knotwork rather than adding to it.
 				const bool knot = theme::GetActiveTheme().knotwork || skin::HasFrame();
 
-				const float leftWidth = ImGui::GetContentRegionAvail().x * 0.30f;
+				const std::vector<registry::Entry> entries = registry::Snapshot();
+				// THE SIDE PANE FITS ITS NAMES (the owner, 2026-10-02: "make it so that the names are always fully visible
+				// ... by making the left pane auto adjust its width to fit the names of the menus"). It used to be a flat
+				// 30% of the window, which clipped "ApocryphaRealm Lock Interaction Overhaul" to "ApocryphaR". Now it is the
+				// widest name actually shown - a mod under a separator with its indent, a separator with its fold arrow and
+				// count - plus the pinned-box gutter, the window padding and a scrollbar; never under the old 30%.
+				float leftWidth = 0.0f;
+				{
+					const float avail = ImGui::GetContentRegionAvail().x;
+					const ImGuiStyle& st = ImGui::GetStyle();
+					const float gutter = ImGui::GetFontSize() * 0.55f + st.ItemInnerSpacing.x * 2.0f;
+					float widest = ImGui::CalcTextSize(TR("AMF_Framework", "Framework")).x;
+					for (const personalization::DisplayEntry& row : personalization::Order(entries))
+					{
+						float w = ImGui::CalcTextSize(row.displayName.c_str()).x;
+						if (row.separator) { w += ImGui::GetFontSize() * 1.1f + ImGui::CalcTextSize("  (000)").x; }
+						else if (row.depth > 0) { w += ImGui::GetFontSize() * 0.9f; }
+						widest = std::max(widest, w);
+					}
+					const float needed = widest + gutter + st.WindowPadding.x * 2.0f + st.ScrollbarSize + st.ItemSpacing.x * 2.0f;
+					// THE WINDOW GROWS RATHER THAN SQUEEZING THE PAGE (the owner, 2026-10-02, after the names pane took the
+					// room: "we're gonna have to have the right pane automatically fit its mod menus by size as well ... now
+					// you can't see hardly anything on the right side"). The page pane keeps at least 28 characters' width;
+					// when the names and that minimum do not both fit, the window widens itself once (up to 98% of the screen;
+					// it is centred, so it grows both ways) - from the names alone, so it does not change with the mod picked.
+					const float rightMin = ImGui::GetFontSize() * 28.0f;
+					const float between = ImGui::GetStyle().ItemSpacing.x + kKnotOutset * 4.0f;
+					if (avail < needed + rightMin + between)
+					{
+						ImGuiWindow* self = ImGui::GetCurrentWindow();
+						const float grown = std::min(self->Size.x + (needed + rightMin + between - avail), display.x * 0.98f);
+						if (grown > self->Size.x + 0.5f)
+						{
+							ImGui::SetWindowSize(ImVec2(grown, self->Size.y));
+							// Oblivion's System-row window is not centred - it sits against the right of the screen - so it
+							// grows leftwards rather than off the edge.
+							if (nested && self->Pos.x + grown > display.x)
+							{
+								ImGui::SetWindowPos(ImVec2(std::max(0.0f, display.x - grown - display.x * 0.01f), self->Pos.y));
+							}
+						}
+					}
+					const float most = std::max(avail * 0.30f, avail - rightMin - between);
+					leftWidth = std::clamp(needed, avail * 0.30f, most);
+				}
 
 				// SMF SHAPE (design decision, 2026-08-30): a one-for-one replacement of SKSE Menu Framework's
 				// window - a SIDE LIST of the registered mods (plus the framework's own entries) and a
@@ -1652,7 +1848,7 @@ namespace renderer
 				// the search box (the owner, 2026-09-19: "the typing indicator just disappears").
 				const bool navToSelected = g_navToSelected.exchange(false);
 				if (navToSelected) { g_frameNavConsumed = ImGui::GetFrameCount(); }
-				const std::vector<registry::Entry> entries = registry::Snapshot();
+				// (the registry snapshot is taken above, before the side pane's width is measured from it)
 				if (selMod >= static_cast<int>(entries.size())) { selMod = 0; }
 
 				// ---- SIDE LIST -------------------------------------------------------------------
@@ -1746,14 +1942,34 @@ namespace renderer
 				// outside the loop so a single press cannot fire on several rows.
 				const bool rowContextMenu = bindings::TakeTriggered(bindings::Action::kContextMenu);
 				const bool rowFavourite = bindings::TakeTriggered(bindings::Action::kFavourite);
+				// GRAB AND MOVE (the owner, 2026-10-02: "pressing right stick will select the mod and then going and
+				// moving the stick up or down will move its position up or down. And this should be rebindable"). The
+				// grab picks the highlighted mod up; the two moves walk it one place at a time (Nudge - the same step as
+				// the Reorder arrows); the grab again, B, or the highlight leaving it puts it down.
+				const bool rowGrab = bindings::TakeTriggered(bindings::Action::kGrabMod);
+				int grabStep = 0;
+				if (bindings::TakeTriggered(bindings::Action::kGrabUp)) { grabStep = -1; }
+				if (bindings::TakeTriggered(bindings::Action::kGrabDown)) { grabStep = 1; }
+				if (const int stickStep = GrabStickStep(); grabStep == 0) { grabStep = stickStep; }
+				bool grabbedFocused = false;
 
 				int shown = 0;
-				for (const personalization::DisplayEntry& row : personalization::Order(entries))
+				const std::vector<personalization::DisplayEntry> displayRows = personalization::Order(entries);
+				for (const personalization::DisplayEntry& row : displayRows)
 				{
 					// The name the player actually reads is what they will type at, so the filter
-					// matches the DISPLAY name - an aliased entry is findable by its alias.
-					if (!needle.empty() && lower(row.displayName).find(needle) == std::string::npos)
+					// matches the DISPLAY name - an aliased entry is findable by its alias. While searching, the list is
+					// flat: separator rows step aside and a match inside a folded group is shown all the same.
+					if (!needle.empty() && (row.separator || lower(row.displayName).find(needle) == std::string::npos))
 					{
+						continue;
+					}
+					// a folded separator hides its mods (MO2's collapse - the owner, 2026-10-02)
+					if (needle.empty() && row.hidden) { continue; }
+
+					if (row.separator)
+					{
+						DrawSeparatorRow(entries, row, rowContextMenu, rowFavourite);
 						continue;
 					}
 					++shown;
@@ -1775,9 +1991,20 @@ namespace renderer
 					const float gutter = boxSide + ImGui::GetStyle().ItemInnerSpacing.x * 2.0f;
 					const ImVec2 rowTopLeft = ImGui::GetCursorScreenPos();
 
-					ImGui::Indent(gutter);
+					// a mod under a separator sits one step in, so the group reads as a group
+					const float rowIndent = gutter + (needle.empty() && row.depth > 0 ? ImGui::GetFontSize() * 0.9f : 0.0f);
+					ImGui::Indent(rowIndent);
 					const bool picked = ImGui::Selectable(row.displayName.c_str(), isOpen);
-					ImGui::Unindent(gutter);
+					ImGui::Unindent(rowIndent);
+
+					// the picked-up mod is boxed, so it reads as held rather than merely highlighted
+					if (!g_grabbedMod.empty() && g_grabbedMod == row.modName)
+					{
+						const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+						ImDrawList* dl = ImGui::GetWindowDrawList();
+						dl->AddRectFilled(mn, mx, IM_COL32(255, 255, 255, 40));
+						dl->AddRect(mn, mx, ImGui::GetColorU32(ImGuiCol_Text), 0.0f, 0, 2.0f);
+					}
 
 					if (favourite)
 					{
@@ -1808,6 +2035,20 @@ namespace renderer
 							personalization::ToggleFavourite(row.modName);
 							settings::Save();
 						}
+						if (rowGrab)
+						{
+							if (g_grabbedMod == row.modName)
+							{
+								g_grabbedMod.clear();
+								logger::info("menu order: put \"{}\" down", row.modName);
+							}
+							else
+							{
+								g_grabbedMod = row.modName;
+								logger::info("menu order: picked \"{}\" up", row.modName);
+							}
+						}
+						if (g_grabbedMod == row.modName) { grabbedFocused = true; }
 					}
 
 					// RIGHT-CLICK: favourite/unfavourite, rename, and the two moves that a pinned
@@ -1837,16 +2078,90 @@ namespace renderer
 							g_renameOpenPending = true;
 						}
 						ImGui::Separator();
+						// the top of ITS OWN group, not of the list - pinning is what puts a mod at the very top (the owner,
+						// 2026-10-02: "That way it's distinct from favoriting")
 						if (ImGui::MenuItem(TR("AMF_MoveToTop", "Move to the top")))
 						{
-							personalization::MoveTo(entries, row.modName,
-												   static_cast<int>(personalization::FavouriteCount()) + 1);
+							personalization::MoveToGroupTop(entries, row.modName);
 							settings::Save();
+						}
+						// REORDER (the owner, 2026-10-02): a little window to the right with an up and a down arrow, one place per
+						// press. Arrow BUTTONS, not menu items, so the window stays open and the mod can be walked several
+						// places in a row; the Menu list page's numbers follow (they read the same order).
+						// the submenus get the context menu's tight padding too - the theme's frame padding left an empty band
+						// round the two arrows and the separator names (seen in the 2.0.0 release captures)
+						ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(ctxPad, ctxPad));
+						const bool reorderOpen = ImGui::BeginMenu(TR("AMF_Reorder", "Reorder"));
+						ImGui::PopStyleVar();
+						if (reorderOpen)
+						{
+							if (ImGui::ArrowButton("##nudgeup", ImGuiDir_Up))
+							{
+								if (personalization::Nudge(entries, row.modName, -1)) { settings::Save(); }
+							}
+							if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s", TR("AMF_MoveUp", "Move up one place")); }
+							ImGui::SameLine();
+							if (ImGui::ArrowButton("##nudgedown", ImGuiDir_Down))
+							{
+								if (personalization::Nudge(entries, row.modName, 1)) { settings::Save(); }
+							}
+							if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s", TR("AMF_MoveDown", "Move down one place")); }
+							ImGui::EndMenu();
+						}
+						// SEPARATORS (the owner, 2026-10-02): make one above this mod, or send this mod into one.
+						if (ImGui::MenuItem(TR("AMF_NewSeparatorAbove", "New separator above")))
+						{
+							BeginNewSeparator(entries, row.modName);
+						}
+						const auto separators = personalization::Separators();
+						ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(ctxPad, ctxPad));
+						const bool sendToOpen = ImGui::BeginMenu(TR("AMF_SendTo", "Send to"), !separators.empty() || row.depth > 0);
+						ImGui::PopStyleVar();
+						if (sendToOpen)
+						{
+							for (const auto& sep : separators)
+							{
+								ImGui::PushID(sep.id.c_str());
+								if (ImGui::MenuItem(sep.name.c_str()))
+								{
+									personalization::SendTo(entries, row.modName, sep.id);
+									settings::Save();
+								}
+								ImGui::PopID();
+							}
+							if (row.depth > 0)
+							{
+								ImGui::Separator();
+								if (ImGui::MenuItem(TR("AMF_SendToNone", "No separator")))
+								{
+									personalization::SendTo(entries, row.modName, std::string());
+									settings::Save();
+								}
+							}
+							ImGui::EndMenu();
 						}
 						ImGui::EndPopup();
 					}
 
 					ImGui::PopID();
+				}
+				if (!g_grabbedMod.empty())
+				{
+					if (!grabbedFocused)
+					{
+						logger::info("menu order: put \"{}\" down (the highlight left it)", g_grabbedMod);
+						g_grabbedMod.clear();
+					}
+					else if (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false))
+					{
+						logger::info("menu order: put \"{}\" down (B)", g_grabbedMod);
+						g_grabbedMod.clear();
+					}
+					else if (grabStep != 0 && personalization::Nudge(entries, g_grabbedMod, grabStep))
+					{
+						settings::Save();
+						logger::info("menu order: \"{}\" stepped {}", g_grabbedMod, grabStep < 0 ? "up" : "down");
+					}
 				}
 				if (entries.empty()) { ImGui::TextDisabled("%s", TR("AMF_NoneRegistered", "none registered")); }
 				else if (shown == 0) { ImGui::TextDisabled("%s", TR("AMF_NoMatch", "no mod matches that")); }
@@ -1867,20 +2182,25 @@ namespace renderer
 				}
 				if (ImGui::BeginPopupModal("##amf_rename", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
 				{
-					ImGui::TextUnformatted(TR("AMF_RenameTitle", "Show this menu as"));
-					ImGui::TextDisabled("%s", g_renameTarget.c_str());
+					const bool renamingSeparator = personalization::IsSeparator(g_renameTarget);
+					ImGui::TextUnformatted(renamingSeparator ? TR("AMF_SeparatorNameTitle", "Name this separator")
+															 : TR("AMF_RenameTitle", "Show this menu as"));
+					if (!renamingSeparator) { ImGui::TextDisabled("%s", g_renameTarget.c_str()); }
 					ImGui::Spacing();
 					ImGui::SetNextItemWidth(ImGui::GetFontSize() * 18.0f);
-					const bool entered = ImGui::InputTextWithHint("##renamefield", g_renameTarget.c_str(),
+					if (ImGui::IsWindowAppearing()) { ImGui::SetKeyboardFocusHere(); }
+					const bool entered = ImGui::InputTextWithHint("##renamefield",
+																  renamingSeparator ? TR("AMF_SeparatorDefaultName", "New separator") : g_renameTarget.c_str(),
 																  g_renameBuffer, sizeof(g_renameBuffer),
 																  ImGuiInputTextFlags_EnterReturnsTrue);
 					keyboard::NoteTextField(ImGui::GetItemID());
-					ImGui::TextDisabled("%s", TR("AMF_RenameHint", "Leave it empty to go back to the mod's own name."));
+					ImGui::TextDisabled("%s", renamingSeparator ? TR("AMF_SeparatorNameHint", "A separator groups the menus below it, up to the next one.")
+																: TR("AMF_RenameHint", "Leave it empty to go back to the mod's own name."));
 					ImGui::Spacing();
 					const bool ok = ImGui::Button(TR("AMF_RenameOk", "Rename")) || entered;
 					ImGui::SameLine();
 					const bool cancel = ImGui::Button(TR("AMF_RenameCancel", "Cancel"));
-					if (ok)
+					if (ok && !(renamingSeparator && g_renameBuffer[0] == '\0'))   // a separator keeps a name
 					{
 						personalization::SetAlias(g_renameTarget, g_renameBuffer);
 						settings::Save();
@@ -2467,6 +2787,13 @@ namespace renderer
 
 	bool SetModAlias(const std::string& a_modName, const std::string& a_alias)
 	{
+		if (personalization::IsSeparator(a_modName))
+		{
+			if (a_alias.empty()) { return false; }   // a separator keeps a name
+			personalization::SetAlias(a_modName, a_alias);
+			settings::Save();
+			return true;
+		}
 		const auto entries = registry::Snapshot();
 		for (const registry::Entry& entry : entries)
 		{
@@ -2483,6 +2810,12 @@ namespace renderer
 	bool MoveModTo(const std::string& a_modName, int a_position)
 	{
 		const auto entries = registry::Snapshot();
+		if (personalization::IsSeparator(a_modName))
+		{
+			personalization::MoveTo(entries, a_modName, a_position);
+			settings::Save();
+			return true;
+		}
 		for (const registry::Entry& entry : entries)
 		{
 			if (entry.modName == a_modName)
@@ -2499,6 +2832,33 @@ namespace renderer
 	{
 		personalization::ResetToAlphabetical();
 		settings::Save();
+	}
+
+	std::string SeparatorOp(const std::string& a_action, const std::string& a_name, const std::string& a_mod, const std::string& a_separator)
+	{
+		const auto entries = registry::Snapshot();
+		bool ok = false;
+		std::string id;
+		if (a_action == "add")
+		{
+			id = personalization::AddSeparator(entries, a_mod, a_name.empty() ? std::string("New separator") : a_name);
+			ok = true;
+		}
+		else if (a_action == "remove") { ok = personalization::RemoveSeparator(a_separator); }
+		else if (a_action == "send") { ok = personalization::SendTo(entries, a_mod, a_separator); }
+		else if (a_action == "collapse")
+		{
+			ok = personalization::IsSeparator(a_separator);
+			if (ok) { personalization::ToggleCollapsed(a_separator); }
+		}
+		else if (a_action == "favourite")
+		{
+			ok = personalization::IsSeparator(a_separator);
+			if (ok) { personalization::ToggleFavourite(a_separator); }
+		}
+		if (ok) { settings::Save(); }
+		return std::string("{\"ok\":") + (ok ? "true" : "false") + ",\"op\":\"separator\",\"action\":\"" + a_action + "\"" +
+			   (id.empty() ? std::string() : ",\"id\":\"" + id + "\"") + "}";
 	}
 
 	bool QueueNav(const std::string& a_direction)
@@ -2573,7 +2933,11 @@ namespace renderer
 			{
 				if (i) { order += ","; }
 				order += "{\"pos\":" + std::to_string(i + 1) + ",\"index\":" + std::to_string(rows[i].registryIndex) +
-						 ",\"mod\":\"" + esc(rows[i].modName) + "\",\"shows\":\"" + esc(rows[i].displayName) + "\"}";
+						 ",\"mod\":\"" + esc(rows[i].modName) + "\",\"shows\":\"" + esc(rows[i].displayName) + "\"" +
+						 (rows[i].separator ? std::string(",\"separator\":true,\"collapsed\":") + (rows[i].collapsed ? "true" : "false") +
+											  ",\"children\":" + std::to_string(rows[i].children)
+											: std::string(",\"depth\":") + std::to_string(rows[i].depth) + (rows[i].hidden ? ",\"hidden\":true" : "")) +
+						 "}";
 			}
 		}
 		// Consumer-window diagnostic (2026-09-12). Mods gate their own hotkeys on

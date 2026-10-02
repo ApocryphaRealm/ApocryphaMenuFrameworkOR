@@ -43,16 +43,26 @@ namespace devbenchtool
 		// shape - no dependency on a JSON library.
 		std::string JsonStr(const std::string& a_json, const char* a_key)
 		{
+			// A KEY is the quoted name followed by a colon. Finding the quoted name alone matched a VALUE first: in
+			// {"op": "separator", "separator": "::sep:2"} the lookup of "separator" hit op's value and returned the
+			// next field's ("collapse"), so amf.menu op separator collapse / send failed (2026-10-02).
 			const std::string key = std::string("\"") + a_key + "\"";
-			auto pos = a_json.find(key);
-			if (pos == std::string::npos)
+			std::string::size_type pos = 0;
+			for (;;)
 			{
-				return "";
-			}
-			pos = a_json.find(':', pos + key.size());
-			if (pos == std::string::npos)
-			{
-				return "";
+				pos = a_json.find(key, pos);
+				if (pos == std::string::npos)
+				{
+					return "";
+				}
+				auto after = pos + key.size();
+				while (after < a_json.size() && (a_json[after] == ' ' || a_json[after] == '\t')) { ++after; }
+				if (after < a_json.size() && a_json[after] == ':')
+				{
+					pos = after;
+					break;
+				}
+				pos += key.size();
 			}
 			++pos;
 			while (pos < a_json.size() && (a_json[pos] == ' ' || a_json[pos] == '\t'))
@@ -158,6 +168,12 @@ namespace devbenchtool
 				result = std::string("{\"ok\":") + (ok ? "true" : "false") +
 						 ",\"op\":\"move\",\"mod\":\"" + mod + "\",\"position\":" + std::to_string(position) + "}";
 			}
+			else if (op == "separator")
+			{
+				// 2026-10-02: separators in the mod list - action add {name, mod: the row it goes above} | remove
+				// {separator} | send {mod, separator: "" = out of every group} | collapse {separator} | favourite {separator}
+				result = renderer::SeparatorOp(JsonStr(args, "action"), JsonStr(args, "name"), JsonStr(args, "mod"), JsonStr(args, "separator"));
+			}
 			else if (op == "resetorder")
 			{
 				renderer::ResetModOrder();
@@ -219,6 +235,15 @@ namespace devbenchtool
 				const std::string text = JsonStr(args, "text");
 				input::QueueText(text);
 				result = "{\"ok\":true,\"op\":\"type\",\"chars\":" + std::to_string(text.size()) + "}";
+			}
+			else if (op == "stick")
+			{
+				// Push a thumbstick and let it go: which 0 left | 1 right, x/y in -1..1 (y > 0 is up), hold in frames.
+				const int which = static_cast<int>(JsonNum(args, "which", 1));
+				const float x = static_cast<float>(JsonNum(args, "x", 0)), y = static_cast<float>(JsonNum(args, "y", 0));
+				const int hold = static_cast<int>(JsonNum(args, "hold", 6));
+				input::QueueStick(which, x, y, hold);
+				result = "{\"ok\":true,\"op\":\"stick\",\"which\":" + std::to_string(which) + ",\"hold\":" + std::to_string(hold) + "}";
 			}
 			else if (op == "key")
 			{
@@ -478,7 +503,7 @@ namespace devbenchtool
 		constexpr const char* descriptor =
 			"{"
 			"\"description\":\"Drive and inspect the Apocrypha Menu Framework window for testing. "
-			"op: open|close|select|activate|state|alias|move|resetorder|theme|language|font|nav|focus|cursor|click "
+			"op: open|close|select|activate|state|alias|move|separator (action add|remove|send|collapse|favourite)|resetorder|theme|language|font|nav|focus|cursor|click "
 			"(args language: a translation file name or auto). For select, node is a path: settings, controls, help "
 			"(pre-1.4.4 system/... paths are still accepted) or mod:<index>. "
 			"activate is a no-op in the SMF shape (kept for compatibility). alias renames a mod's menu entry "

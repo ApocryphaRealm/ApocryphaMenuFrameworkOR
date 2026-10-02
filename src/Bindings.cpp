@@ -65,6 +65,14 @@ namespace bindings
 			// the exclusivity rule allows because the keyboard's actions only act while it is open.
 			set(Action::kContextMenu,  KeyKind::kNone,       -1, PadKind::kButton,   0x8000);   // Y
 			set(Action::kFavourite,    KeyKind::kKeyboard, 0x21, PadKind::kButton,   0x0040);   // F / L3
+			// GRAB AND MOVE (the owner, 2026-10-02: "pressing right stick will select the mod and then going and
+			// moving the stick up or down will move its position up or down. And this should be rebindable").
+			// R3 here too, as in Skyrim. R3 is the target lock in GAMEPLAY, but the game takes no input while this menu is
+			// open (the pad gate), so the two never meet (the owner, 2026-10-02: "Obviously, you're not going to target
+			// lock while in the menu").
+			set(Action::kGrabMod,      KeyKind::kNone,       -1, PadKind::kButton,   0x0080);   // R3
+			set(Action::kGrabUp,       KeyKind::kNone,       -1, PadKind::kStickDir, 0x10);     // right stick up
+			set(Action::kGrabDown,     KeyKind::kNone,       -1, PadKind::kStickDir, 0x11);     // right stick down
 		}
 
 		// Two functions that can be live at the same moment must not share a binding. Everything
@@ -191,6 +199,9 @@ namespace bindings
 		case Action::kTabNext:      return TR("AMF_ActTabNext", "Next tab");
 		case Action::kContextMenu:  return TR("AMF_ActContextMenu", "Open a mod's options");
 		case Action::kFavourite:    return TR("AMF_ActFavourite", "Favourite the highlighted mod");
+		case Action::kGrabMod:      return TR("AMF_ActGrabMod", "Pick up a mod to move it");
+		case Action::kGrabUp:       return TR("AMF_ActGrabUp", "Move the picked-up mod up");
+		case Action::kGrabDown:     return TR("AMF_ActGrabDown", "Move the picked-up mod down");
 		default:                    return "";
 		}
 	}
@@ -206,6 +217,9 @@ namespace bindings
 		case Action::kTabNext:      return TR("AMF_ActTabNextHelp", "Walks the tabs across the top of a page. The D-pad never changes a tab - move the highlight onto one and activate it, or use these.");
 		case Action::kContextMenu:  return TR("AMF_ActContextMenuHelp", "The same menu a right-click opens: favourite, rename, move to the top.");
 		case Action::kFavourite:    return TR("AMF_ActFavouriteHelp", "Pins or unpins the highlighted mod without opening the menu first.");
+		case Action::kGrabMod:      return TR("AMF_ActGrabModHelp", "Picks up the highlighted mod in the list. Move it with the two controls below, one place at a time; press this again, or B, to put it down.");
+		case Action::kGrabUp:
+		case Action::kGrabDown:     return TR("AMF_ActGrabMoveHelp", "Moves a picked-up mod one place. Held on a stick, it keeps stepping.");
 		default:                    return "";
 		}
 	}
@@ -227,7 +241,8 @@ namespace bindings
 		// Only the actions that ARE commands: the navigation ones become ImGui keys instead and
 		// must not be raised as well, or a press would both move the cursor and fire a command.
 		static constexpr Action kCommands[] = {
-			Action::kTabPrev, Action::kTabNext, Action::kContextMenu, Action::kFavourite
+			Action::kTabPrev, Action::kTabNext, Action::kContextMenu, Action::kFavourite,
+			Action::kGrabMod, Action::kGrabUp, Action::kGrabDown
 		};
 		std::scoped_lock lock(g_lock);
 		for (Action a : kCommands)
@@ -572,7 +587,7 @@ namespace bindings
 		const char* kKeys[] = {
 			"ToggleMenu", "Close", "Up", "Down", "Left", "Right", "Activate", "Back",
 			"PaneLeft", "PaneRight", "OskShift", "OskBackspace", "OskDone",
-			"TabPrev", "TabNext", "ContextMenu", "Favourite"
+			"TabPrev", "TabNext", "ContextMenu", "Favourite", "GrabMod", "GrabUp", "GrabDown"
 		};
 		static_assert(sizeof(kKeys) / sizeof(kKeys[0]) == static_cast<std::size_t>(Action::kCount));
 	}

@@ -52,6 +52,9 @@ namespace bindings
 		kTabNext,          // next tab
 		kContextMenu,      // open the highlighted mod's context menu (was hard-wired to Y)
 		kFavourite,        // favourite/unfavourite the highlighted mod outright
+		kGrabMod,          // pick the highlighted mod up / put it down (R3)
+		kGrabUp,           // move the picked-up mod up one place (right stick up)
+		kGrabDown,         // move the picked-up mod down one place (right stick down)
 		kCount
 	};
 

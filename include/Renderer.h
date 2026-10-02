@@ -84,6 +84,9 @@ namespace renderer
 	bool SetModAlias(const std::string& a_modName, const std::string& a_alias);
 	bool MoveModTo(const std::string& a_modName, int a_position);
 	void ResetModOrder();
+	// separators (2026-10-02): action add {name, mod = above which} | remove {separator} | send {mod, separator ("" = none)}
+	// | collapse {separator} | favourite {separator}; returns the tool's JSON answer
+	std::string SeparatorOp(const std::string& a_action, const std::string& a_name, const std::string& a_mod, const std::string& a_separator);
 
 	std::string GetMenuStateJson();
 	// 1.8.9: draw the active theme's frame around a rect on a consumer's draw list (see Renderer.cpp).

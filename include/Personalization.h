@@ -28,6 +28,17 @@
 //           "number only the ones you care about": it would force players to number the lot by
 //           hand. A mod installed later inserts at its alphabetical position within the
 //           existing sequence rather than landing at the end.
+//
+//   SEPARATOR  (the owner, 2026-10-02, MO2's separators: "press Y on controller or right click on mouse to create a
+//           separator and the separator should function just like a mod in the rename and reorder function ... mods
+//           menus are children of the separator above them like in mo2", then "the mods can be collapsed into the
+//           separator" and "a send to option for sending the selected mod to a separator"). A separator is an ENTRY
+//           in the custom sequence named kSeparatorPrefix + a number, so the machinery a mod row has works on it as it
+//           is: its name is its alias, favouriting pins it, typing a position moves it. The mods after a separator,
+//           up to the next one, are its children; a collapsed separator hides them in the side list. Decided the same
+//           day: A-Z / Z-A sort only the mods NOT under a separator ("let's make the A to Z sorting ignore mods in a
+//           separator"); a separator can be favourited ("you can also favorite separators") and pins with its mods;
+//           favourite MODS stay at the very top ("favorite mods stay at the top").
 // ============================================================================================
 
 #include "Registry.h"
@@ -43,7 +54,15 @@ namespace personalization
 		int registryIndex = 0;      // index into the registry snapshot this row draws
 		std::string modName;        // the mod's own registered name (identity - never shown when aliased)
 		std::string displayName;    // alias when set, else modName (what the list shows and sorts by)
+		bool separator = false;     // a separator row (registryIndex is -1)
+		int depth = 0;              // 1 = a mod under a separator
+		bool hidden = false;        // a mod under a COLLAPSED separator (the side list skips it, the menu-list page shows it)
+		bool collapsed = false;     // a separator whose mods are folded away
+		int children = 0;           // a separator's mod count
 	};
+
+	inline constexpr const char* kSeparatorPrefix = "::sep:";
+	bool IsSeparator(const std::string& a_name);
 
 	// The list the menu draws, in display order, one row per registered mod.
 	std::vector<DisplayEntry> Order(const std::vector<registry::Entry>& a_entries);
@@ -54,7 +73,34 @@ namespace personalization
 
 	// Move a mod to 1-based position a_position within the current display order; every other
 	// entry re-flows around it. Out-of-range positions clamp. Switches the list to custom order.
+	// A SEPARATOR moves with its mods (the whole group lands at the position).
 	void MoveTo(const std::vector<registry::Entry>& a_entries, const std::string& a_modName, int a_position);
+
+	// ---- Separators ---------------------------------------------------------------------------
+	// A new separator named a_name, placed directly above a_beforeName (at the end when a_beforeName is empty or not in
+	// the list). Switches the list to custom order. Returns the separator's identity (kSeparatorPrefix + a number).
+	std::string AddSeparator(const std::vector<registry::Entry>& a_entries, const std::string& a_beforeName, const std::string& a_name);
+	// Removes it; its mods join the separator above it (or the top of the list). Its name, pin and fold go with it.
+	bool RemoveSeparator(const std::string& a_separator);
+	// Sends a mod to the end of a separator's group; an empty a_separator sends it out of every group (the end of the
+	// mods above the first separator).
+	bool SendTo(const std::vector<registry::Entry>& a_entries, const std::string& a_modName, const std::string& a_separator);
+	// "Move to the top" for a MOD (the owner, 2026-10-02: "the move to top button moves it to the top of the separator that
+	// it's in. That way it's distinct from favoriting"): the first place in its own group - right under its separator, or
+	// the head of the loose mods when it is in none.
+	bool MoveToGroupTop(const std::vector<registry::Entry>& a_entries, const std::string& a_modName);
+	// "Reorder" (the owner, 2026-10-02: "two little arrows on it which moves the mod up or down by one position"): one step
+	// up (a_direction -1) or down (+1) past the next VISIBLE row - a folded group's hidden mods are stepped over, and
+	// stepping past a separator carries the mod into or out of that group, as in MO2. false at either end.
+	bool Nudge(const std::vector<registry::Entry>& a_entries, const std::string& a_modName, int a_direction);
+	struct SeparatorInfo
+	{
+		std::string id;
+		std::string name;
+	};
+	std::vector<SeparatorInfo> Separators();   // in list order
+	bool IsCollapsed(const std::string& a_separator);
+	void ToggleCollapsed(const std::string& a_separator);
 
 	// Custom order on/off. Off = pure alphabetical by display name (the default).
 	bool IsCustomOrder();
