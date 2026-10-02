@@ -105,7 +105,7 @@ namespace settings
 		                                 // the author 2026-08-27, same anchor philosophy as the minimap; more presets later.
 
 		// [Theme]
-		std::string themeId = "cyrodiil";     // registry id (theme::Palette::id). Default is Cyrodiil Map, the embroidered map edge (2026-10-02)
+		std::string themeId = "oblivion";     // registry id (theme::Palette::id). Default is Oblivion, the embroidered map edge (2026-10-02)
 		                                     // own Skyrim theme for the current test (the author,
 		                                     // 2026-08-27) - "Untarnished" (the original identity)
 		                                     // is still registered and selectable, just not default.

@@ -10,7 +10,7 @@ Newest first. Versions are issued by the version gate; a number here is one a bu
   gone and the window no longer moves: without a title bar ImGui would let any empty part of the window drag it. Each
   way in keeps its own place. The key-opened window opens where it was last left; the System-row window opens on the
   right of the screen so the System page's rows stay in view. Both still resize from their edges.
-- **Cyrodiil Map, this framework's own look, is the new default theme** (the owner: *"give it a frame art similar to how
+- **Oblivion, this framework's own look, is the new default theme** (the owner: *"give it a frame art similar to how
   Skyrim has a frame art, except this frame will be more like an embroidered map's edge. Something a bit decorative in
   a gold or brown color"*).
   - The frame: an embroidered map's edge - a gold couched cord, a compass star in a stitched ring at each corner, and a
@@ -20,6 +20,8 @@ Newest first. Versions are issued by the version gate; a number here is one a bu
   - The edges tile rather than stretch, so the stitches keep their size.
   - The frame scales with the UI: 26 px at 1080p, 43 px at 1800 px tall.
   - Skyrim's knotwork stays as the "Skyrim" theme, and every other theme is unchanged.
+  - First built as "Cyrodiil Map", then renamed (the owner: *"just rename the current theme to Oblivion, and we can get
+    rid of the old Oblivion paper theme"*). A saved `cyrodiil` or `oblivion-paper` theme id now opens as `oblivion`.
 
 ### Added - the Skyrim framework's 2.0 (the owner: *"update the Oblivion AMF to the most up-to-date version in line with
 AMF for Skyrim. So it has the separators and all that"*)

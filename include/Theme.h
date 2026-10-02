@@ -50,7 +50,7 @@ namespace theme
 
 		// With knotwork on, draw the framework's OBLIVION frame instead: the embroidered map's edge in gold and brown
 		// (MapEdgeBorder.h, the owner, 2026-10-02), its edges tiled so the stitches keep their size. The built-in
-		// "Cyrodiil Map" theme sets it; a theme INI may too (bMapEdge=1).
+		// "Oblivion" theme sets it; a theme INI may too (bMapEdge=1).
 		bool mapEdge = false;
 
 		// The theme's own ART (1.9.8, the owner, 2026-09-25: AMF themes built on Vel'dun UI and

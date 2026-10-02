@@ -198,6 +198,9 @@ namespace theme
 	std::string MigrateThemeId(const std::string& a_id)
 	{
 		if (a_id == "vanilla" || a_id == "mo2-skyrim") { return "skyrim"; }
+		// 2026-10-02: the map-edge theme's first name, and the local Oblivion Paper theme it replaced (the owner: "rename
+		// the current theme to Oblivion, and we can get rid of the old Oblivion paper theme").
+		if (a_id == "cyrodiil" || a_id == "oblivion-paper") { return "oblivion"; }
 		return a_id;
 	}
 
@@ -266,17 +269,18 @@ namespace theme
 				/*border*/ 0xFFB0B0B0, /*text*/ 0xFFE9F2F5, /*textDim*/ 0xFF717171,
 				/*accent*/ 0xFF2B91A1, /*knotwork*/ true });
 
-			// "Cyrodiil Map" - this framework's OWN look and its default (the owner, 2026-10-02: "give it a frame art
+			// "Oblivion" (named "Cyrodiil Map" for an hour; the owner: "just rename the current theme to
+			// Oblivion") - this framework's OWN look and its default (the owner, 2026-10-02: "give it a frame art
 			// similar to how Skyrim has a frame art, except this frame will be more like an embroidered map's edge ...
 			// in a gold or brown color"). The embroidered map-edge frame (MapEdgeBorder.h, original art) on a
 			// parchment ground with brown ink: #E4DBCC paper, #2A1C12 text, #6F5D4C dim, #6B563F lines, #8A6A2C
 			// brass accent - the game's paper-menu palette as plain colours, so no game art ships. ABGR packing.
-			RegisterTheme({ "cyrodiil", "Cyrodiil Map",
+			RegisterTheme({ "oblivion", "Oblivion",
 				/*background*/ 0xFFCCDBE4, /*frame*/ 0xFF161C24, /*borderThickness*/ 1.0f,
 				/*border*/ 0xFF3F566B, /*text*/ 0xFF121C2A, /*textDim*/ 0xFF4C5D6F,
 				/*accent*/ 0xFF2C6A8A, /*knotwork*/ true, /*mapEdge*/ true });
 
-			g_activeId = "cyrodiil";
+			g_activeId = "oblivion";
 
 			ScanUserThemes();
 

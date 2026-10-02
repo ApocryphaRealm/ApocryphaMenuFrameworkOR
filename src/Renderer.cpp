@@ -563,7 +563,7 @@ namespace renderer
 			g_mapSRV = gfx::CreateTextureRGBA(mapedge::kRGBA, static_cast<int>(mapedge::kWidth), static_cast<int>(mapedge::kHeight));
 			if (!g_mapSRV)
 			{
-				logger::warn("map edge: the frame texture could not be uploaded; the Cyrodiil Map theme falls back to the knotwork");
+				logger::warn("map edge: the frame texture could not be uploaded; the Oblivion theme falls back to the knotwork");
 			}
 
 			theme::Apply();
@@ -813,7 +813,7 @@ namespace renderer
 				values.themeId = themes[currentIndex].id;
 				settings::Save();
 			}
-			ImGui::TextWrapped("%s", TR("AMF_ThemeHelp", "\"Cyrodiil Map\" is this framework's own look - an embroidered map's edge in "
+			ImGui::TextWrapped("%s", TR("AMF_ThemeHelp", "\"Oblivion\" is this framework's own look - an embroidered map's edge in "
 							   "gold and brown on parchment. \"Skyrim\" is the Nordic knotwork frame with silver and gold lines. "
 							   "\"Untarnished\" is the framework's original identity: the same layout with clean lines and no frame art."));
 		
@@ -1468,7 +1468,7 @@ namespace renderer
 						"type into: put 3 in a row's number and it moves there, and everything else re-flows around it."));
 
 				ImGui::SeparatorText(TR("AMF_ManLook", "How it looks"));
-				bullet(TR("AMF_ManLook1", "Theme: Cyrodiil Map is the embroidered map edge, Skyrim the Nordic knotwork frame; the others "
+				bullet(TR("AMF_ManLook1", "Theme: Oblivion is the embroidered map edge, Skyrim the Nordic knotwork frame; the others "
 						  "are plainer. Settings -> Theme."));
 				bullet(TR("AMF_ManLook2", "Font: drop a .ttf into OBSE/Plugins/ApocryphaMenuFramework/fonts and pick it under "
 						  "Settings -> Font."));
