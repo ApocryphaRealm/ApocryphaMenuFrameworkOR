@@ -150,6 +150,12 @@ namespace settings
 			}
 			ReadBool(entries, "Watchdog.bEnabled", g_values.watchdogEnabled);
 			ReadBool(entries, "FastExit.bEnabled", g_values.fastExit);
+			ReadBool(entries, "Screenshot.bEnabled", g_values.screenshotEnabled);
+			ReadNumber(entries, "Screenshot.uKey", g_values.screenshotKey);
+			ReadBool(entries, "Screenshot.bCtrl", g_values.screenshotCtrl);
+			ReadBool(entries, "Screenshot.bShift", g_values.screenshotShift);
+			ReadBool(entries, "Screenshot.bAlt", g_values.screenshotAlt);
+			if (const auto it = entries.find("Screenshot.sFolder"); it != entries.end()) { g_values.screenshotFolder = it->second; }
 			ReadBool(entries, "Startup.bBlackCurtain", g_values.startupCurtain);
 			ReadNumber(entries, "Startup.uTimeoutSeconds", g_values.curtainTimeoutSeconds);
 			{
@@ -271,6 +277,18 @@ namespace settings
 				"; driver's shutdown code - the phase where a closing game can get stuck beyond any kill.\n"
 				"; Saves and settings are written when you save or change them, not at exit. 0 disables.\n"
 				"bEnabled=" << (g_values.fastExit ? 1 : 0) << "\n"
+				"\n"
+				"[Screenshot]\n"
+				"; A key that saves a PNG of what the screen shows, this menu included (Steam's F12 misses\n"
+				"; the menu). uKey is a DirectInput scan code (88 = F12) and bCtrl / bShift / bAlt the keys\n"
+				"; held with it. sFolder empty = Documents\\My Games\\Oblivion Remastered\\AMF Screenshots.\n"
+				"; A rising double beep says it was saved. 0 disables.\n"
+				"bEnabled=" << (g_values.screenshotEnabled ? 1 : 0) << "\n"
+				"uKey=" << g_values.screenshotKey << "\n"
+				"bCtrl=" << (g_values.screenshotCtrl ? 1 : 0) << "\n"
+				"bShift=" << (g_values.screenshotShift ? 1 : 0) << "\n"
+				"bAlt=" << (g_values.screenshotAlt ? 1 : 0) << "\n"
+				"sFolder=" << g_values.screenshotFolder << "\n"
 				"\n"
 				"[Startup]\n"
 				"; Hold the screen black from the first frame the game draws until its main menu is\n"

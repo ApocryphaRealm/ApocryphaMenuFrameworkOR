@@ -87,6 +87,14 @@ namespace settings
 		// loaded DLL's and driver's shutdown code - the phase in which a game can wedge into a state
 		// no kill, inside or outside the process, can reach. Nothing the game needs happens there.
 		bool fastExit = true;
+		// [Screenshot] (1.0.6, the owner, 2026-10-02): a key that saves what the screen shows, this window included -
+		// Steam's F12 misses it. See Screenshot.h. Ctrl+F12 by default (F12 alone is Steam's).
+		bool          screenshotEnabled = true;
+		std::uint32_t screenshotKey = 0x58;   // DirectInput scan code; 0x58 = F12
+		bool          screenshotCtrl = true;
+		bool          screenshotShift = false;
+		bool          screenshotAlt = false;
+		std::string   screenshotFolder;       // empty = Documents\My Games\Oblivion Remastered\AMF Screenshots
 		// Startup curtain (the owner, 2026-09-15): hold the screen black from the first drawn
 		// frame until the game's main menu is up, so the logo frames and the half-drawn menu are
 		// never shown. Lifts by itself on a timeout - see Curtain.cpp, where failing safe is the

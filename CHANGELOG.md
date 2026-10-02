@@ -23,6 +23,16 @@ Newest first. Versions are issued by the version gate; a number here is one a bu
   - First built as "Cyrodiil Map", then renamed (the owner: *"just rename the current theme to Oblivion, and we can get
     rid of the old Oblivion paper theme"*). A saved `cyrodiil` or `oblivion-paper` theme id now opens as `oblivion`.
 
+### Added
+- **A screenshot key that catches this menu: Ctrl+F12** (the owner, 2026-10-02: *"I'd rather just have a hotkey that
+  takes the same screenshot that yours does ... It only needs to run during the game"*).
+  - Steam's F12 copies the frame before this framework draws, so it shows the game without the menu.
+  - This key copies what the screen shows, menu and all, and saves it as a PNG on a worker thread. A rising double
+    beep says it was saved.
+  - How and when the framework draws is unchanged.
+  - `[Screenshot]` in the INI: the key (any key, with Ctrl / Shift / Alt) and the folder. By default it saves to
+    `Documents\My Games\Oblivion Remastered\AMF Screenshots`.
+
 ### Added - the Skyrim framework's 2.0 (the owner: *"update the Oblivion AMF to the most up-to-date version in line with
 AMF for Skyrim. So it has the separators and all that"*)
 - **Separators in the mod list**, like MO2's.
