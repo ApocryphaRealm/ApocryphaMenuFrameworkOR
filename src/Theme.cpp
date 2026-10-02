@@ -1,6 +1,7 @@
 #include "Theme.h"
 
 #include "KnotworkBorder.h"
+#include "MapEdgeBorder.h"
 
 #include "Settings.h"
 #include "Logger.h"
@@ -165,6 +166,7 @@ namespace theme
 				else if (key == "sTextDim") { ParseColor(value, palette.textDim); }
 				else if (key == "sAccent") { ParseColor(value, palette.accent); }
 				else if (key == "bKnotwork") { palette.knotwork = (value == "1" || value == "true"); }
+				else if (key == "bMapEdge") { palette.mapEdge = (value == "1" || value == "true"); if (palette.mapEdge) { palette.knotwork = true; } }
 				else if (key == "sSkinFrame") { palette.skinFrame = std::string(value); }
 				else if (key == "sSkinBackground") { palette.skinBackground = std::string(value); }
 				else if (key == "sSkinPlates") { palette.skinPlates = std::string(value); }
@@ -264,7 +266,17 @@ namespace theme
 				/*border*/ 0xFFB0B0B0, /*text*/ 0xFFE9F2F5, /*textDim*/ 0xFF717171,
 				/*accent*/ 0xFF2B91A1, /*knotwork*/ true });
 
-			g_activeId = "skyrim";
+			// "Cyrodiil Map" - this framework's OWN look and its default (the owner, 2026-10-02: "give it a frame art
+			// similar to how Skyrim has a frame art, except this frame will be more like an embroidered map's edge ...
+			// in a gold or brown color"). The embroidered map-edge frame (MapEdgeBorder.h, original art) on a
+			// parchment ground with brown ink: #E4DBCC paper, #2A1C12 text, #6F5D4C dim, #6B563F lines, #8A6A2C
+			// brass accent - the game's paper-menu palette as plain colours, so no game art ships. ABGR packing.
+			RegisterTheme({ "cyrodiil", "Cyrodiil Map",
+				/*background*/ 0xFFCCDBE4, /*frame*/ 0xFF161C24, /*borderThickness*/ 1.0f,
+				/*border*/ 0xFF3F566B, /*text*/ 0xFF121C2A, /*textDim*/ 0xFF4C5D6F,
+				/*accent*/ 0xFF2C6A8A, /*knotwork*/ true, /*mapEdge*/ true });
+
+			g_activeId = "cyrodiil";
 
 			ScanUserThemes();
 
@@ -301,6 +313,8 @@ namespace theme
 		// the figure - its corner ornament is a fixed 26px band inside whatever rect it frames - but
 		// applying it to the plain themes too keeps the layout identical whichever theme is picked,
 		// so switching theme changes the colours and the art, never the geometry.
+		// The map-edge frame (2026-10-02) was drawn to the same 26 px corner, so it shares this padding.
+		static_assert(mapedge::kDrawCorner == knotwork::kCorner, "every built-in frame shares one corner, so one layout");
 		constexpr float kFramePadding = static_cast<float>(knotwork::kCorner) + 8.0f;
 		style.WindowPadding = ImVec2(kFramePadding, kFramePadding);
 		style.TabBorderSize = active.borderThickness;
@@ -408,7 +422,8 @@ namespace theme
 		c[ImGuiCol_NavWindowingHighlight] = accent;
 		c[ImGuiCol_NavWindowingDimBg] = ImVec4{ 0, 0, 0, 0.4f };
 
-		logger::info("Theme applied: \"{}\" ({}); knotwork={}; game HUD opacity {:.2f}",
-					 active.name, active.id, active.knotwork, GetGameHUDOpacity());
+		logger::info("Theme applied: \"{}\" ({}); frame={}; game HUD opacity {:.2f}",
+					 active.name, active.id, !active.knotwork ? "none" : (active.mapEdge ? "map edge" : "knotwork"),
+					 GetGameHUDOpacity());
 	}
 }

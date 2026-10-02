@@ -48,6 +48,11 @@ namespace theme
 		// Trosski MO2 style's defining feature; off for plain themes like Untarnished.
 		bool knotwork = false;
 
+		// With knotwork on, draw the framework's OBLIVION frame instead: the embroidered map's edge in gold and brown
+		// (MapEdgeBorder.h, the owner, 2026-10-02), its edges tiled so the stitches keep their size. The built-in
+		// "Cyrodiil Map" theme sets it; a theme INI may too (bMapEdge=1).
+		bool mapEdge = false;
+
 		// The theme's own ART (1.9.8, the owner, 2026-09-25: AMF themes built on Vel'dun UI and
 		// Oathvein UI). A theme in this project means replacement art, so a theme INI may name the
 		// same pieces [Skin] does - frame, background, control plates - and they draw whenever that

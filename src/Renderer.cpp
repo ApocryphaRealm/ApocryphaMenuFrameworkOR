@@ -9,6 +9,7 @@
 #include "Persistence.h"
 #include "PreciseSlider.h"
 #include "KnotworkBorder.h"
+#include "MapEdgeBorder.h"
 #include "Skin.h"
 #include "Bindings.h"
 #include "Personalization.h"
@@ -108,6 +109,8 @@ namespace renderer
 		// Knotwork frame texture (the embedded MO2-Skyrim border-image.png). Uploaded once at device-ready
 		// through gfx:: (a D3D12 descriptor); used by DrawKnotworkFrame as an ImGui texture id.
 		void* g_knotSRV = nullptr;
+		// The framework's own Oblivion frame (MapEdgeBorder.h, the embroidered map's edge), uploaded beside it.
+		void* g_mapSRV = nullptr;
 		// Menu navigation state, promoted from static locals so the DevBench tool can drive and read
 		// it from the listener thread (see DevBenchTool.cpp). Guarded by g_selLock; the render loop
 		// copies in at frame start and out at frame end.
@@ -134,19 +137,26 @@ namespace renderer
 		// frame art (skin::FrameTexture) goes through exactly the same geometry the built-in
 		// knotwork always did - one implementation, so a supplied frame cannot draw differently
 		// from the one this was proven on.
+		// a_tile (2026-10-02): the edges REPEAT their middle strip at its own size instead of stretching it - for art
+		// with a pattern along the edge (the map edge's stitches), which stretching would smear. The last repeat on
+		// each side is cut short, UVs and all, so nothing overhangs the far corner.
+		// a_dcs: the corner's size ON SCREEN when it differs from its size in the texture (0 = the same) - the map
+		// edge is drawn from a texture at twice its size, scaled with the UI.
 		void DrawNineSlice(ImDrawList* dl, void* a_srv, float W, float H, float cs,
-						   const ImVec2& p0, const ImVec2& p1)
+						   const ImVec2& p0, const ImVec2& p1, bool a_tile = false, float a_dcs = 0.0f)
 		{
 			if (!a_srv || !dl || W <= 0.0f || H <= 0.0f || cs <= 0.0f)
 			{
 				return;
 			}
+			const float dcs = a_dcs > 0.0f ? a_dcs : cs;
+			const float k = dcs / cs;   // screen pixels per texture pixel
 
-			// UV split points (source), and screen split points (dest, corners at fixed cs px).
+			// UV split points (source), and screen split points (dest, corners at dcs px).
 			const float u0 = 0.0f, u1 = cs / W, u2 = (W - cs) / W, u3 = 1.0f;
 			const float v0 = 0.0f, v1 = cs / H, v2 = (H - cs) / H, v3 = 1.0f;
-			const float x0 = p0.x, x1 = p0.x + cs, x2 = p1.x - cs, x3 = p1.x;
-			const float y0 = p0.y, y1 = p0.y + cs, y2 = p1.y - cs, y3 = p1.y;
+			const float x0 = p0.x, x1 = p0.x + dcs, x2 = p1.x - dcs, x3 = p1.x;
+			const float y0 = p0.y, y1 = p0.y + dcs, y2 = p1.y - dcs, y3 = p1.y;
 
 			// Degenerate guard: a window smaller than two corners would flip the middle slices.
 			if (x2 <= x1 || y2 <= y1)
@@ -165,6 +175,29 @@ namespace renderer
 			slice(x2, y0, x3, y1, u2, v0, u3, v1);  // top-right
 			slice(x0, y2, x1, y3, u0, v2, u1, v3);  // bottom-left
 			slice(x2, y2, x3, y3, u2, v2, u3, v3);  // bottom-right
+			if (a_tile && W > 2.0f * cs && H > 2.0f * cs)
+			{
+				const float runU = (W - 2.0f * cs) * k;   // the strip's own length, on screen
+				const float runV = (H - 2.0f * cs) * k;
+				constexpr int kMaxRepeats = 512;
+				int n = 0;
+				for (float x = x1; x < x2 && n < kMaxRepeats; x += runU, ++n)
+				{
+					const float xe = std::min(x + runU, x2);
+					const float ue = u1 + (u2 - u1) * ((xe - x) / runU);
+					slice(x, y0, xe, y1, u1, v0, ue, v1);   // top
+					slice(x, y2, xe, y3, u1, v2, ue, v3);   // bottom
+				}
+				n = 0;
+				for (float y = y1; y < y2 && n < kMaxRepeats; y += runV, ++n)
+				{
+					const float ye = std::min(y + runV, y2);
+					const float ve = v1 + (v2 - v1) * ((ye - y) / runV);
+					slice(x0, y, x1, ye, u0, v1, u1, ve);   // left
+					slice(x2, y, x3, ye, u2, v1, u3, ve);   // right
+				}
+				return;
+			}
 			// edges (stretched along their run)
 			slice(x1, y0, x2, y1, u1, v0, u2, v1);  // top
 			slice(x1, y2, x2, y3, u1, v2, u2, v3);  // bottom
@@ -182,6 +215,18 @@ namespace renderer
 			{
 				const ImVec2 sz = skin::FrameSize();
 				DrawNineSlice(dl, skin::FrameTexture(), sz.x, sz.y, skin::FrameCorner(), p0, p1);
+				return;
+			}
+			if (theme::GetActiveTheme().mapEdge && g_mapSRV)
+			{
+				// Scaled with the layout: the window padding is the corner + 8 px at the 1080p baseline times the UI scale
+				// (1.67 at 1800 px tall), so the band grows with the text and always fits the padding it sits in. Drawn
+				// at a fixed 26 px it came out thin and lost its stitches on a 4K screen (first in-game look, 2026-10-02).
+				const float base = static_cast<float>(knotwork::kCorner) + 8.0f;
+				const float scale = std::max(1.0f, ImGui::GetStyle().WindowPadding.x / base);
+				DrawNineSlice(dl, g_mapSRV, static_cast<float>(mapedge::kWidth), static_cast<float>(mapedge::kHeight),
+							  static_cast<float>(mapedge::kCorner), p0, p1, /*tile*/ true,
+							  static_cast<float>(mapedge::kDrawCorner) * scale);
 				return;
 			}
 			DrawNineSlice(dl, g_knotSRV, static_cast<float>(knotwork::kWidth),
@@ -514,6 +559,11 @@ namespace renderer
 			{
 				logger::warn("knotwork: the frame texture could not be uploaded; frame ornament disabled");
 			}
+			g_mapSRV = gfx::CreateTextureRGBA(mapedge::kRGBA, static_cast<int>(mapedge::kWidth), static_cast<int>(mapedge::kHeight));
+			if (!g_mapSRV)
+			{
+				logger::warn("map edge: the frame texture could not be uploaded; the Cyrodiil Map theme falls back to the knotwork");
+			}
 
 			theme::Apply();
 			// After theme::Apply has registered the themes, so an active theme's own art is found.
@@ -708,7 +758,7 @@ namespace renderer
 				auto& v = settings::Get();
 				const bool anySet = v.nestedWindow.IsSet() || v.hotkeyWindow.IsSet();
 				ImGui::TextUnformatted(TR("AMF_WindowPosSize", "Window position and size"));
-				ImGui::TextWrapped("%s", TR("AMF_WindowProfilesHelp", "The window remembers where you leave it: move it by its title bar or resize it by a corner and it opens there next time. The button puts it back to centred on the screen."));
+				ImGui::TextWrapped("%s", TR("AMF_WindowProfilesHelp", "The window opens in the same place each time and remembers its size: drag an edge or a corner to resize it, and it opens at that size next time. The button puts it back to its starting size and place."));
 				ImGui::BeginDisabled(!anySet);
 				if (ImGui::Button(TR("AMF_ResetBoth", "Reset both to default")))
 				{
@@ -762,9 +812,9 @@ namespace renderer
 				values.themeId = themes[currentIndex].id;
 				settings::Save();
 			}
-			ImGui::TextWrapped("%s", TR("AMF_ThemeHelp", "\"Skyrim\" is the knotwork look - the Nordic frame with silver and gold "
-							   "lines. \"Untarnished\" is the framework's original identity: the same "
-							   "layout with clean lines and no frame art."));
+			ImGui::TextWrapped("%s", TR("AMF_ThemeHelp", "\"Cyrodiil Map\" is this framework's own look - an embroidered map's edge in "
+							   "gold and brown on parchment. \"Skyrim\" is the Nordic knotwork frame with silver and gold lines. "
+							   "\"Untarnished\" is the framework's original identity: the same layout with clean lines and no frame art."));
 		
 			ImGui::Spacing();
 
@@ -1269,14 +1319,15 @@ namespace renderer
 						"type into: put 3 in a row's number and it moves there, and everything else re-flows around it."));
 
 				ImGui::SeparatorText(TR("AMF_ManLook", "How it looks"));
-				bullet(TR("AMF_ManLook1", "Theme: Skyrim is the Nordic knotwork frame; the others are plainer. Settings -> Theme."));
+				bullet(TR("AMF_ManLook1", "Theme: Cyrodiil Map is the embroidered map edge, Skyrim the Nordic knotwork frame; the others "
+						  "are plainer. Settings -> Theme."));
 				bullet(TR("AMF_ManLook2", "Font: drop a .ttf into OBSE/Plugins/ApocryphaMenuFramework/fonts and pick it under "
 						  "Settings -> Font."));
 				bullet(TR("AMF_ManLook3", "Text size scales on top of the automatic resolution scale, so the menu reads the same on "
 						  "a 1080p screen and a 4K one."));
 				bullet(TR("AMF_ManLook4", "Language: the framework's own text follows the game's language unless you force one."));
-				bullet(TR("AMF_ManLook5", "The window remembers where you leave it, separately for each way of opening it. Drag it "
-						  "by its title, drag a corner to resize."));
+				bullet(TR("AMF_ManLook5", "The window opens in the same place each time, separately for each way of opening it, and "
+						  "remembers its size. Drag an edge or a corner to resize it."));
 				ImGui::EndTabItem();
 			}
 
@@ -1413,7 +1464,14 @@ namespace renderer
 			// frame. If the nested measurement is not ready yet the flag is left set and the next
 			// frame tries again, rather than falling back to the centre and jumping later.
 			bool appliedThisFrame = false;
-			ImGuiWindowFlags windowFlags = ImGuiWindowFlags_None;
+			// NO TITLE BAR (the owner, 2026-10-02: "do the same thing that AMF for Skyrim did by removing the top bar and
+			// ... connecting the frame on all four sides" - the Skyrim framework's 2.0.0). The frame now runs round the
+			// window's own top edge and the collapse arrow is gone; the window closes by its key or the Start button.
+			// NoMove as in Skyrim: without a title bar ImGui would let any empty part of the window drag it
+			// (ConfigWindowsMoveFromTitleBarOnly does not apply), which the owner ruled out on 2026-09-19 ("we need to
+			// make it so you can't drag AMF by anything but the top bar"). Each way in keeps its place: the key-opened
+			// window its remembered centre, the System-row window its remembered spot on the right. Both still resize.
+			ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove;
 			// 1.7.7/1.7.8 (the owner, 2026-09-13): the KEY-OPENED window is fixed to the screen centre; an
 			// edge drag grows both sides (the centre never moves); a corner drag keeps the window's SHAPE
 			// and grows it - the text does not scale ("it should just increase the size of the window
