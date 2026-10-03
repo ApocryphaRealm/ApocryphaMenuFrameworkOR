@@ -38,10 +38,13 @@
 // FRAMEWORK'S ImGui context, not a copy of its own. Two ways:
 //
 //   1. C++ Dear ImGui (recommended). Build against Dear ImGui 1.90.8 from the docking branch, WITHOUT
-//      IMGUI_DISABLE_OBSOLETE_FUNCTIONS and with the default imconfig (ImDrawIdx 16-bit, 32-bit ImTextureID).
-//      Include <imgui.h> BEFORE this header. Call AMF::UseFrameworkImGui() at the top of every callback: it
-//      checks that your ImGui matches the framework's byte for byte, adopts the framework's context and
-//      allocators, and returns false (draw nothing) if they differ - a mismatched ImGui would corrupt memory.
+//      IMGUI_DISABLE_OBSOLETE_FUNCTIONS and with the default imconfig (16-bit ImDrawIdx, void* ImTextureID).
+//      With vcpkg, the stock port gives another version (1.90.2 at the usual CommonLibSSE-NG baseline), so pin
+//      it with the overlay port in example/cmake/ports/imgui (1.90.8 docking) and the "docking-experimental"
+//      feature, as the example does. Include <imgui.h> BEFORE this header. Call
+//      AMF::UseFrameworkImGui() at the top of every callback: it checks that your ImGui matches the
+//      framework's byte for byte, adopts the framework's context and allocators, and returns false (draw
+//      nothing) if they differ - a mismatched ImGui would corrupt memory. (Oblivion 0.1.0+, Skyrim 1.7.2+)
 //
 //   2. The C exports. The framework exports the complete cimgui 1.90.8dock function set by name ("igText",
 //      "igSliderFloat", "igBeginTabBar" ...). Resolve any of them with AMF::Proc("igText") and call them with
@@ -313,11 +316,15 @@ namespace AMF
 	// ---- Dear ImGui -------------------------------------------------------------------------------------------
 
 	// The framework's ImGuiContext* (null until the game has drawn its first frame). UseFrameworkImGui() is the
-	// normal way to use it. (Oblivion 0.1.0+)
+	// normal way to use it. (Oblivion 0.1.0+; Skyrim 1.7.2+, through its cimgui igGetCurrentContext export)
 	inline void* ImGuiContext()
 	{
 		AMF_H_FN("AMF_GetImGuiContext", void* (*)());
-		return fn ? fn() : nullptr;
+		if (fn) {
+			return fn();
+		}
+		static void* (*s_cimgui)() = nullptr;
+		return detail::Resolve("igGetCurrentContext", s_cimgui) ? s_cimgui() : nullptr;
 	}
 
 #ifdef IMGUI_VERSION
@@ -332,19 +339,46 @@ namespace AMF
 			return false;
 		}
 		if (s_state == 0) {
-			AMF_H_FN("AMF_CheckImGuiABI", bool (*)(const char*, std::size_t, std::size_t, std::size_t, std::size_t, std::size_t, std::size_t));
-			if (!fn) {
-				return false;   // no framework yet, or one too old to share its context - try again next call
-			}
-			if (!fn(IMGUI_VERSION, sizeof(ImGuiIO), sizeof(ImGuiStyle), sizeof(ImVec2), sizeof(ImVec4), sizeof(ImDrawVert), sizeof(ImDrawIdx))) {
-				s_state = -1;   // the framework logs the mismatch; use the ig* exports (AMF::Proc) instead
-				return false;
-			}
-			static bool (*s_alloc)(void**, void**, void**) = nullptr;
+			using CheckFn = bool (*)(const char*, std::size_t, std::size_t, std::size_t, std::size_t, std::size_t, std::size_t);
+			AMF_H_FN("AMF_CheckImGuiABI", CheckFn);
 			void* allocFn = nullptr;
 			void* freeFn = nullptr;
 			void* user = nullptr;
-			if (detail::Resolve("AMF_GetImGuiAllocatorFunctions", s_alloc) && s_alloc(&allocFn, &freeFn, &user)) {
+			if (fn) {
+				// Oblivion: the framework's own check and allocators
+				if (!fn(IMGUI_VERSION, sizeof(ImGuiIO), sizeof(ImGuiStyle), sizeof(ImVec2), sizeof(ImVec4), sizeof(ImDrawVert), sizeof(ImDrawIdx))) {
+					s_state = -1;   // the framework logs the mismatch; use the ig* exports (AMF::Proc) instead
+					return false;
+				}
+				static bool (*s_alloc)(void**, void**, void**) = nullptr;
+				if (!(detail::Resolve("AMF_GetImGuiAllocatorFunctions", s_alloc) && s_alloc(&allocFn, &freeFn, &user))) {
+					allocFn = freeFn = nullptr;
+				}
+			} else {
+				// Skyrim: the same answers from the framework's cimgui exports - its Dear ImGui's own version string,
+				// its own layout check (ImGui's IMGUI_CHECKVERSION, made inside the framework) and its allocators
+				static const char* (*s_version)() = nullptr;
+				static CheckFn s_layout = nullptr;
+				static void (*s_cimguiAlloc)(void**, void**, void**) = nullptr;
+				if (!detail::Resolve("igGetVersion", s_version) || !detail::Resolve("igDebugCheckVersionAndDataLayout", s_layout) ||
+					!detail::Resolve("igGetAllocatorFunctions", s_cimguiAlloc)) {
+					return false;   // no framework yet, or one too old to share its context - try again next call
+				}
+				const char* theirs = s_version();
+				const char* ours = IMGUI_VERSION;
+				std::size_t i = 0;
+				while (theirs && theirs[i] && theirs[i] == ours[i]) {
+					++i;
+				}
+				// the version first, so the layout check (which asserts in a debug ImGui) only ever sees a matching build
+				if (!theirs || theirs[i] != ours[i] ||
+					!s_layout(IMGUI_VERSION, sizeof(ImGuiIO), sizeof(ImGuiStyle), sizeof(ImVec2), sizeof(ImVec4), sizeof(ImDrawVert), sizeof(ImDrawIdx))) {
+					s_state = -1;   // a different Dear ImGui: use the ig* exports (AMF::Proc) instead
+					return false;
+				}
+				s_cimguiAlloc(&allocFn, &freeFn, &user);
+			}
+			if (allocFn && freeFn) {
 				ImGui::SetAllocatorFunctions(reinterpret_cast<ImGuiMemAllocFunc>(allocFn), reinterpret_cast<ImGuiMemFreeFunc>(freeFn), user);
 			}
 			s_state = 1;
