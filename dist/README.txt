@@ -1,6 +1,6 @@
 ApocryphaRealm Menu Framework - Oblivion Remastered
 ===================================================
-Version 1.0.6
+Version 1.0.7
 
 An original, GPL-3.0-or-later in-game menu framework (embedding Dear ImGui) for The Elder
 Scrolls IV: Oblivion Remastered, loaded by OBSE64. It is the same framework as Apocrypha Menu
