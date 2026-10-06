@@ -2,6 +2,17 @@
 
 Newest first. Versions are issued by the version gate; a number here is one a build earned by working in game.
 
+## 1.0.7 - 2026-10-06 - untested (built; Oblivion Remastered is not installed, so not run in game)
+
+A player's crash report (2026-10-06, AMF 1.0.6 with HUD Position Manager 1.0.2, UE4SS loaded): the game crashed about a
+minute after the pause menu was closed, inside the SKSE MENUS row code, with no menu open.
+
+### Fixed
+- **A crash after closing the pause menu.** When the game's garbage collector condemned the System page, one check
+  forgot the page while the scan for pages still found it, so the row was added again to a page whose widgets were
+  already being freed. Pages the collector has condemned (marked unreachable or garbage, being destroyed, or renamed
+  to None) are now skipped by the scan and by every kept reference alike, every step into the page's widgets is checked
+  live before it is read, and the row's add is guarded so a fault skips that page instead of closing the game.
 ## 1.0.6 - 2026-10-02 - untested
 
 ### Changed

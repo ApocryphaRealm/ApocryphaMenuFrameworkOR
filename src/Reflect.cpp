@@ -157,6 +157,29 @@ namespace reflect
 			std::memcpy(&out, &n, sizeof(out));
 			return out;
 		}
+
+		// An object the garbage collector has condemned is still in its array slot, with the same address and class,
+		// for several frames while the purge frees it a piece at a time (a player's crash report, 2026-10-06: the
+		// System page was pruned as gone by Handle::Get, found again by Instances, and Inject walked into its freed
+		// slots). Read only for an object its slot still holds, so its memory is still there.
+		bool Dying(const UE::FUObjectItem* a_item, const UE::UObject* a_o)
+		{
+			using IF = UE::EInternalObjectFlags;
+			if (a_item->HasAnyFlags(IF::Garbage | IF::Unreachable | IF::PendingKill | IF::PendingConstruction)) return true;
+			using OF = UE::EObjectFlags;
+			if (a_o->HasAnyFlags(OF::BeginDestroyed | OF::FinishDestroyed | OF::Garbage | OF::PendingKill)) return true;
+			return NameBits(a_o) == 0;   // BeginDestroy renames the object to None
+		}
+
+		// the slot's item while it still holds a_o and a_o is not on its way out; nullptr otherwise
+		const UE::FUObjectItem* LiveItem(std::int32_t a_idx, const UE::UObject* a_o)
+		{
+			auto* arr = UE::FUObjectArray::GetSingleton();
+			if (!a_o || !arr || a_idx < 0 || a_idx >= arr->GetObjectArrayNum()) return nullptr;
+			auto* item = arr->IndexToObject(a_idx);
+			if (!item || reinterpret_cast<const UE::UObject*>(item->object) != a_o) return nullptr;
+			return Dying(item, a_o) ? nullptr : item;
+		}
 	}
 
 	bool IsLive(UE::UObject* a_o)
@@ -172,7 +195,7 @@ namespace reflect
 			}
 			return false;
 		}
-		return SlotObject(idx) == a_o;
+		return LiveItem(idx, a_o) != nullptr;
 	}
 
 	void Handle::Set(UE::UObject* a_live)
@@ -195,6 +218,7 @@ namespace reflect
 		// the slot first: the kept pointer is read only once the array still holds it (so it is not freed)
 		if (!ptr || SlotObject(index) != ptr) return nullptr;
 		if (ptr->GetClass() != cls || NameBits(ptr) != name) return nullptr;   // the slot and address reused by another object
+		if (!LiveItem(index, ptr)) return nullptr;                             // condemned by the garbage collector
 		return ptr;
 	}
 
@@ -211,7 +235,8 @@ namespace reflect
 		for (std::int32_t i = 0; i < n; ++i) {
 			auto* item = arr->IndexToObject(i);
 			auto* o = item ? reinterpret_cast<UE::UObject*>(item->object) : nullptr;
-			if (o && o->GetClass() == a_class && o != cdo) {
+			// the same liveness test as Handle::Get, so a page one forgets is never found again by the other
+			if (o && o->GetClass() == a_class && o != cdo && !Dying(item, o) && !o->HasAnyFlags(UE::EObjectFlags::ArchetypeObject)) {
 				out.push_back(o);
 			}
 		}

@@ -378,6 +378,20 @@ namespace systemrow
 			return nullptr;
 		}
 
+		bool Inject(UE::UObject* a_page);
+
+		// Inject under a structured-exception guard (it owns no objects that need unwinding here); a_faulted is set when
+		// the guard caught an access violation
+		bool SafeInject(UE::UObject* a_page, int& a_faulted)
+		{
+			__try {
+				return Inject(a_page);
+			} __except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
+				a_faulted = 1;
+				return false;
+			}
+		}
+
 		bool Inject(UE::UObject* a_page)
 		{
 			auto* quit = ue::ObjProp(a_page, "settings_system_quit_button");
@@ -386,9 +400,13 @@ namespace systemrow
 				logger::warn("system row: the System page has no settings_system_quit_button / settings_system_save_button - no row");
 				return false;
 			}
+			// every hop is checked live before it is read: a page being purged still answers its own properties with
+			// pointers into widgets already freed (a player's crash report, 2026-10-06: quit->Slot->Parent)
+			if (!reflect::IsLive(quit) || !reflect::IsLive(save)) return false;
 			auto* quitSlot = ue::ObjProp(quit, "Slot");
+			if (!reflect::IsLive(quitSlot)) return false;
 			auto* panel = ue::ObjProp(quitSlot, "Parent");
-			if (!panel) {
+			if (!reflect::IsLive(panel)) {
 				return false;   // not laid out yet: asked again next time round
 			}
 			const auto rows = RowsInOrder(panel);
@@ -573,9 +591,19 @@ namespace systemrow
 		for (auto* page : reflect::Instances(pageClass)) {
 			const bool done = std::ranges::any_of(g_injected, [&](const Injected& i) { return i.page.Is(page); });
 			if (done || std::ranges::any_of(g_refused, [&](const reflect::Handle& r) { return r.Is(page); })) continue;
-			if (!Inject(page)) {
+			if (!reflect::IsLive(page)) continue;   // condemned since the scan: not now, and not refused either
+			int faulted = 0;
+			if (!SafeInject(page, faulted)) {
+				if (faulted) {
+					// the last net: the page's tree was freed under us. Refused for good, the game goes on.
+					logger::error("system row: adding the row faulted on the System page - that page is skipped (please send this log)");
+					g_refused.emplace_back(page);
+					continue;
+				}
 				// a page not laid out yet is tried again; one this code warned about is not
-				if (ue::ObjProp(ue::ObjProp(ue::ObjProp(page, "settings_system_quit_button"), "Slot"), "Parent")) {
+				auto* quit = ue::ObjProp(page, "settings_system_quit_button");
+				auto* slot = reflect::IsLive(quit) ? ue::ObjProp(quit, "Slot") : nullptr;
+				if (reflect::IsLive(slot) && ue::ObjProp(slot, "Parent")) {
 					g_refused.emplace_back(page);
 				}
 			}
