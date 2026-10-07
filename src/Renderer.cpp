@@ -647,6 +647,11 @@ namespace renderer
 		// right sends you to the favorites tab instead of the add item box" - the page's own widgets sit
 		// side by side (SameLine), and the tab step used to win before ImGui had a chance to move.
 		int g_pendingTabStep = 0;
+		// A right press in the LIST pane, decided one frame late like the content pane's sideways press (the
+		// owner, 2026-10-07: on the Mods row, D-pad right "skips past the toggle and sort button and goes to the
+		// right pane"): if ImGui moved the highlight to a widget beside it in the list pane, it stays there; a press
+		// that moved nothing goes across to the options.
+		bool g_pendingSideRight = false;
 		bool g_innerFresh = false;  // the declaration was renewed this frame
 
 		// Where a driving tool's synthetic press lands (amf.menu op=nav). It is read in exactly the
@@ -2325,10 +2330,24 @@ namespace renderer
 					const int  driven   = g_navRequest.exchange(0);
 					const bool navLeft  = wantsLeft  || driven == 1;
 					const bool navRight = wantsRight || driven == 2;
-					if (sideHasNav && navRight && !editing)
+					if (g_pendingSideRight)
 					{
-						g_focusPane = 2;
-						logger::debug("nav: list -> options");
+						g_pendingSideRight = false;
+						if (sideHasNav && GImGui && GImGui->NavJustMovedToId != 0)
+						{
+							logger::debug("nav: ImGui moved to a widget in the list pane; staying");
+						}
+						else if (sideHasNav && !editing)
+						{
+							g_focusPane = 2;
+							logger::debug("nav: list -> options");
+						}
+					}
+					else if (sideHasNav && navRight && !editing)
+					{
+						// a driven op=nav press moves no ImGui cursor, so it still crosses next frame
+						g_pendingSideRight = true;
+						logger::debug("nav: right press in the list noted, deciding next frame");
 					}
 					// Inside the content pane a sideways press is ImGui's first: if there is a widget to that
 					// side, the cursor moves there and nothing else happens. A press that moved nothing never

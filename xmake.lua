@@ -12,7 +12,7 @@ add_shflags("/PDBALTPATH:%_PDB%", {force = true})
 includes("lib/commonlibob64")
 
 set_project("ApocryphaMenuFramework")
-set_version("1.0.7")
+set_version("1.0.8")
 set_license("GPL-3.0-or-later")
 set_languages("c++23")
 set_warnings("allextra")
