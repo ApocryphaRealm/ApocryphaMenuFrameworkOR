@@ -5,6 +5,22 @@ Newest first. Versions are issued by the version gate; a number here is one a bu
 ## 1.0.8 - 2026-10-07 - untested (built; Oblivion Remastered is not installed, so not run in game)
 
 ### Fixed
+- **A launch crash with UE4SS's ProcessEvent hook on the stack** (a player's report on Nexus, 2026-10-14, AMF 1.0.7:
+  "Unhandled Exception: 0xe06d7363", `UE4SS!RC::Unreal::HookedProcessEvent() [Hooks.cpp:467]` above
+  `ApocryphaMenuFramework`). The exception was a C++ exception thrown inside UE4SS's own ProcessEvent hook, not in this
+  framework's code. The framework sat on that stack only as the caller. Its ProcessEvent watch (the System-menu row's
+  vtable swap, PEHook.cpp) passes every call on the watched widgets' native vtable to the original ProcessEvent. That
+  original is UE4SS's hook when UE4SS is installed. Nothing caught the exception on its way back, so it reached the
+  game, and the game closed.
+  - The watch's detour now catches any C++ exception that comes up out of the original ProcessEvent, so the game goes on.
+    Only that one call is left unfinished. The first one is logged with its class, function and message, then the count
+    at 10, 100, 1000.
+  - An exception from one of the framework's own watchers turns the watchers off for the session (the System-menu row
+    then adds no row), logged once.
+  - The per-frame tick (the System-menu row and the camera keep-awake, main.cpp) now catches the same way: a feature that
+    throws is turned off for the session, logged once, instead of taking the game down from the message pump.
+  - DevBench `amf.menu op=systemrow` also reports `watchersOff` and `caughtBelowProcessEvent`.
+  - What UE4SS threw, and why, is not known yet: the next log from an affected player names it.
 - **D-pad right on the Mods row skipped its own controls.** On the row with the alphabetical tick box, the A-Z / Z-A
   switch and the Sort button, right went straight across to the options pane instead of to the next control (the
   owner, 2026-10-07: "pressing D-pad right skips past the toggle and sort button and goes to the right pane"). A

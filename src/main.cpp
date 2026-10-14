@@ -217,11 +217,41 @@ AMF_API bool AMF_CheckImGuiABI(const char* a_version, std::size_t a_io, std::siz
 
 namespace
 {
+	// Runs one per-frame feature; a C++ exception out of it (its own code, or UE4SS's ProcessEvent hook under one of its
+	// reflected calls) turns that feature off for the session, logged once, instead of reaching the game's message pump
+	// and closing the game (1.0.8, a player's launch crash with UE4SS's ProcessEvent hook on the stack, 2026-10-14).
+	void FeatureThrew(const char* a_feature, bool& a_off, const char* a_what) noexcept
+	{
+		a_off = true;
+		try {
+			logger::error("{} threw a C++ exception ({}) - it is off for this session; the game goes on. Please send this log "
+						  "and UE4SS.log.",
+				a_feature, a_what ? a_what : "not a std::exception");
+			logger::flush();
+		} catch (...) {}
+	}
+
+	void Guarded(const char* a_feature, bool& a_off, void (*a_tick)())
+	{
+		if (a_off) {
+			return;
+		}
+		try {
+			a_tick();
+		} catch (const std::exception& e) {
+			FeatureThrew(a_feature, a_off, e.what());   // inside the handler: what() lives only as long as the exception
+		} catch (...) {
+			FeatureThrew(a_feature, a_off, nullptr);
+		}
+	}
+
 	// the game thread, every frame (Tick.cpp): the System-menu row and the pause, both 1.0.4
 	void OnFrame()
 	{
-		systemrow::Tick();
-		pause::Tick();
+		static bool rowOff = false;
+		static bool pauseOff = false;
+		Guarded("the System-menu row", rowOff, &systemrow::Tick);
+		Guarded("the pause / camera keep-awake", pauseOff, &pause::Tick);
 	}
 }
 

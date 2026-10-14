@@ -1,5 +1,6 @@
 #include "DevBenchTool.h"
 #include "SystemRow.h"
+#include "PEHook.h"
 
 #include "TestBenchAPI.h"
 #include "Input.h"
@@ -283,7 +284,10 @@ namespace devbenchtool
 				// 1.8.4: the live journal category list - every row in order, and whether our press
 				// listener is attached. Our row's index moves under us (SetShowMod splices a Mod Manager
 				// row in at index 2), so this is how a "the row does nothing" report is actually checked.
-				result = std::string("{\"ok\":true,\"op\":\"systemrow\",\"systemRow\":") + systemrow::ListJson() + "}";
+				// 1.0.8: and the exceptions the ProcessEvent detour stopped (PEHook.cpp)
+				result = std::string("{\"ok\":true,\"op\":\"systemrow\",\"systemRow\":") + systemrow::ListJson() +
+				         ",\"watchersOff\":" + (pe::WatchersOff() ? "true" : "false") +
+				         ",\"caughtBelowProcessEvent\":" + std::to_string(pe::CaughtBelow()) + "}";
 			}
 			else if (op == "style")
 			{

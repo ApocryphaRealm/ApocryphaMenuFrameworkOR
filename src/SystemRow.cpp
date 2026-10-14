@@ -553,6 +553,7 @@ namespace systemrow
 	void Tick()
 	{
 		if (!settings::Get().systemMenuRow) return;
+		if (pe::WatchersOff()) return;   // a watcher threw (PEHook.cpp): a row added now would open nothing when pressed
 		if (++g_frame % 30 != 0) return;   // twice a second is plenty for a menu that opens by hand
 		if (!reflect::SelfCheck()) return;
 		if (!g_rowClass) {

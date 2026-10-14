@@ -20,4 +20,10 @@ namespace pe
 	std::string FunctionName(UE::UFunction* a_fn);
 
 	std::string Utf8(const UE::FString& a_s);
+
+	// The detour stops C++ exceptions instead of letting them reach the game (1.0.8, a player's launch crash): one from a
+	// watcher turns every watcher off for the session (WatchersOff); one from the original ProcessEvent below it (UE4SS's
+	// hook, a mod it runs) is caught, logged once and counted (CaughtBelow).
+	bool          WatchersOff();
+	std::uint64_t CaughtBelow();
 }

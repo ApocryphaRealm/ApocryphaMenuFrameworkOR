@@ -19,6 +19,59 @@ namespace pe
 		std::atomic<std::size_t>  g_watcherCount{ 0 };
 		std::mutex                g_lock;
 
+		// C++ exceptions are stopped here, never let through to the game (a player's launch crash, 2026-10-14: an
+		// exception thrown inside UE4SS's ProcessEvent hook, which this detour had called, reached the game's frames and
+		// closed it - 0xE06D7363). Nothing a frame below the game's ProcessEvent caller throws is meant for the game:
+		// it has no handler for it, so letting it through always ends the game.
+		std::atomic<bool>          g_watchersOff{ false };   // a watcher threw once: watchers stay off for the session
+		std::atomic<std::uint64_t> g_belowThrows{ 0 };       // exceptions out of the original ProcessEvent, caught
+
+		std::string ClassAndFunction(UE::UObject* a_obj, UE::UFunction* a_fn) noexcept
+		{
+			try {
+				auto* cls = a_obj ? a_obj->GetClass() : nullptr;
+				return std::format("{}::{}", cls ? Utf8(cls->GetFName().ToString()) : std::string("?"), FunctionName(a_fn));
+			} catch (...) {
+				return "?";
+			}
+		}
+
+		// one of the framework's own watchers threw: log it once and stop calling watchers for the rest of the session
+		// (the vtable swap stays, as a plain pass-through to the original)
+		void WatcherThrew(UE::UObject* a_obj, UE::UFunction* a_fn, const char* a_what) noexcept
+		{
+			if (g_watchersOff.exchange(true)) {
+				return;
+			}
+			try {
+				logger::error("pe: a ProcessEvent watcher threw a C++ exception on {} ({}) - the framework's ProcessEvent "
+							  "watchers are off for this session (the System-menu row will not open the menu); the game goes on. "
+							  "Please send this log.",
+					ClassAndFunction(a_obj, a_fn), a_what ? a_what : "not a std::exception");
+				logger::flush();
+			} catch (...) {}
+		}
+
+		// an exception came up out of the original ProcessEvent - thrown below this framework (UE4SS's ProcessEvent hook,
+		// a mod it runs, or the game). Caught so the game goes on; the first is logged in full, then the count at 10,
+		// 100, 1000 ... (transitions only - this is a hot path).
+		void BelowThrew(UE::UObject* a_obj, UE::UFunction* a_fn, const char* a_what) noexcept
+		{
+			const auto n = g_belowThrows.fetch_add(1, std::memory_order_relaxed) + 1;
+			try {
+				if (n == 1) {
+					logger::error("pe: a C++ exception came up out of ProcessEvent on {} ({}) - it was thrown below this "
+								  "framework (UE4SS's ProcessEvent hook, a mod it runs, or the game), not by it; caught so the "
+								  "game goes on (that one call did not finish). Please send this log and UE4SS.log.",
+						ClassAndFunction(a_obj, a_fn), a_what ? a_what : "not a std::exception");
+					logger::flush();
+				} else if (n == 10 || n == 100 || n == 1000 || n == 10000) {
+					logger::warn("pe: {} C++ exceptions have now come up out of ProcessEvent and been caught (latest on {}: {})", n,
+						ClassAndFunction(a_obj, a_fn), a_what ? a_what : "not a std::exception");
+				}
+			} catch (...) {}
+		}
+
 		void Detour(UE::UObject* a_obj, UE::UFunction* a_fn, void* a_params)
 		{
 			ProcessEvent_t original = nullptr;
@@ -30,20 +83,35 @@ namespace pe
 					break;
 				}
 			}
-			if (a_obj && a_fn) {
-				auto* cls = a_obj->GetClass();
-				const std::size_t nw = g_watcherCount.load(std::memory_order_acquire);
-				for (std::size_t i = 0; i < nw; ++i) {
-					if (g_watchers[i].cls == cls) {
-						g_watchers[i].handler(a_obj, a_fn, a_params);
+			if (a_obj && a_fn && !g_watchersOff.load(std::memory_order_relaxed)) {
+				try {
+					auto* cls = a_obj->GetClass();
+					const std::size_t nw = g_watcherCount.load(std::memory_order_acquire);
+					for (std::size_t i = 0; i < nw; ++i) {
+						if (g_watchers[i].cls == cls) {
+							g_watchers[i].handler(a_obj, a_fn, a_params);
+						}
 					}
+				} catch (const std::exception& e) {
+					WatcherThrew(a_obj, a_fn, e.what());
+				} catch (...) {
+					WatcherThrew(a_obj, a_fn, nullptr);
 				}
 			}
 			if (original) {
-				original(a_obj, a_fn, a_params);
+				try {
+					original(a_obj, a_fn, a_params);
+				} catch (const std::exception& e) {
+					BelowThrew(a_obj, a_fn, e.what());
+				} catch (...) {
+					BelowThrew(a_obj, a_fn, nullptr);
+				}
 			}
 		}
 	}
+
+	bool WatchersOff() { return g_watchersOff.load(std::memory_order_relaxed); }
+	std::uint64_t CaughtBelow() { return g_belowThrows.load(std::memory_order_relaxed); }
 
 	std::string Utf8(const UE::FString& a_s)
 	{
